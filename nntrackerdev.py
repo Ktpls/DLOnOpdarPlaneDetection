@@ -192,3 +192,6 @@ os.system("pause")
 # %%
 def rmModel():
     os.remove(modelpath)
+
+
+rmModel()

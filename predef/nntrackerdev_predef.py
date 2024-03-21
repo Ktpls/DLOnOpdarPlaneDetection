@@ -215,6 +215,30 @@ def affineAugment(m, theta, zoomrate, ifflip, movvec):
     return m
 
 
+def safeAffineAug(spl, lbl):
+    lbl = NormalizeImgToChanneled_CvFormat(lbl)
+    lblSurface = np.sum(lbl)
+    h, w, c = spl.shape
+    while True:
+        theta = np.random.uniform(-np.pi / 2, np.pi / 2)
+        zoomrate = np.random.uniform(0.75, 1.25)
+        ifflip = np.random.choice([1, -1], size=2, replace=True)
+        movvec = np.random.uniform(-0.5, 0.5, size=2) * [w, h]
+        # movvec = np.array([0, 0])
+        spl1 = affineAugment(spl, theta, zoomrate, ifflip, movvec)
+        lbl1 = affineAugment(lbl, theta, zoomrate, ifflip, movvec)
+        lbl1 = np.where(lbl1 > 0.5, 1.0, 0.0).astype(np.float32)
+        expectedSurface = lblSurface * zoomrate
+        insightRate = np.sum(lbl1) / expectedSurface
+        if insightRate >= 0.6:
+            return spl1, lbl1
+        elif insightRate <= 0.2:
+            # consider as no plane
+            return spl1, np.zeros_like(lbl1)
+        else:
+            pass
+
+
 def noiseAugment(m):
     # rand line
     def draw_random_line(image, n):
@@ -293,16 +317,8 @@ class labeldataset(torch.utils.data.Dataset):
 
     def rtDataAug(self, item: SampleItem):
         spl, lbl = item.spl, item.lbl
-        lbl = NormalizeImgToChanneled_CvFormat(lbl)
 
-        h, w, c = spl.shape
-        theta = np.random.uniform(-np.pi / 2, np.pi / 2)
-        zoomrate = np.random.uniform(0.75, 1.25)
-        ifflip = np.random.choice([1, -1], size=2, replace=True)
-        movvec = np.random.uniform(-0.3, 0.3, size=2) * [w, h]
-        spl = affineAugment(spl, theta, zoomrate, ifflip, movvec)
-        lbl = affineAugment(lbl, theta, zoomrate, ifflip, movvec)
-        lbl = np.where(lbl > 0.5, 1, 0)
+        spl, lbl = safeAffineAug(spl, lbl)
 
         spl = self.totensor(spl)
         spl = self.augger(spl)
