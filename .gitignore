@@ -1,0 +1,16 @@
+.git/
+__pycache__/
+#.vscode/
+#exp/
+output/
+*.7z
+log/
+runs/
+*.pth
+.idea
+dataset/
+/deprecated
+/asset/autofreshmap/raws
+test/wtdmpocrtest/
+asset/wtdistmeaspy/
+asset/statistics
