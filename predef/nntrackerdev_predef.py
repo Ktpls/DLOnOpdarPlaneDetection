@@ -153,7 +153,7 @@ class NonAffineTorchAutoAugment(torchvision.transforms.AutoAugment):
             [("Invert", 0.9, None), ("Equalize", 0.6, None)],
             [("Posterize", 0.6, 7), ("Posterize", 0.6, 6)],
             [("Posterize", 0.8, 5), ("Equalize", 1.0, None)],
-            [("Sharpness", 0.3, 9), ("Brightness", 0.7, 9)],
+            [("Sharpness", 0.3, 9), ("Brightness", 0.7, 6)],
             [("Sharpness", 0.4, 7), ("Invert", 0.6, None)],
             [("Sharpness", 0.8, 1), ("Sharpness", 0.9, 3)],
             [("Solarize", 0.4, 5), ("AutoContrast", 0.9, None)],
