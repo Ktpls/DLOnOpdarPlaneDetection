@@ -397,7 +397,7 @@ def viewmodel(model, device, datasetusing):
                     [
                         lbl,
                         lblFromPi,
-                        np.zeros_like(lbl),
+                        #np.zeros_like(lbl),
                         lblhat,
                     ]
                 )
