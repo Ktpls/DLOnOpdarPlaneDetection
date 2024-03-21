@@ -230,7 +230,7 @@ def safeAffineAug(spl, lbl):
         lbl1 = np.where(lbl1 > 0.5, 1.0, 0.0).astype(np.float32)
         expectedSurface = lblSurface * zoomrate
         insightRate = np.sum(lbl1) / expectedSurface
-        if insightRate >= 0.6:
+        if insightRate >= 0.7:
             return spl1, lbl1
         elif insightRate <= 0.3:
             # consider as no plane
@@ -253,7 +253,7 @@ def noiseAugment(m):
     # m = draw_random_line(m, 5)
 
     def gaussianNoise(src):
-        noise = np.random.normal(0, 0.1, src.shape)
+        noise = np.random.normal(0, 0.1, src.shape) * (src.max() - src.min())
         src = np.clip(src + noise, 0, 1, dtype=np.float32)
         return src
 
