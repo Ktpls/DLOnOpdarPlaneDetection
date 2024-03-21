@@ -1,12 +1,23 @@
-# neural network tracker
-# %% basics
+"""
+import os
+installPath=r'/kaggle/working/'
+projPath=os.path.join(installPath, 'DLOnOpdarPlaneDetection')
+if not os.path.exists(projPath):
+    !git clone https://github.com/Ktpls/DLOnOpdarPlaneDetection.git
+%cd {projPath}
+!git pull
+"""
 
-from nntracker import *
+# %% basics
 
 RunOnWtUtilityEnviroment = True
 if RunOnWtUtilityEnviroment:
+    from predef.nntracker import *
+
     datasetroot = r"dataset/"
 else:
+    from predef.nntracker import *
+
     datasetroot = r"/kaggle/input/nntrackerle2renh"
 
 # %%  nn def
@@ -29,7 +40,6 @@ writer = SummaryWriter(
 )  # 存放log文件的目录
 
 # %% dataset
-from nntrackerdev_predef import *
 
 
 @dataclasses.dataclass

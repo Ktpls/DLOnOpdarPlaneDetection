@@ -1,4 +1,4 @@
-from utilkaggle import *
+from .utilkaggle import *
 
 stdShape = [128, 128]
 
