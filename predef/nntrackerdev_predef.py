@@ -363,7 +363,7 @@ def AABBOf(lbl, noobjthresh=5):
 def viewmodel(model, device, datasetusing):
     model.eval()
 
-    plotShape = [4, 2]
+    plotShape = [7, 4]
     subplotShape = [1, 2]
     samplenum = np.prod(plotShape)
     npp = nestedPyPlot(plotShape, subplotShape, plt.figure(figsize=(20, 20)))
@@ -386,7 +386,7 @@ def viewmodel(model, device, datasetusing):
             pi = pi.numpy()
             src, lbl = [tensorimg2ndarray(d) for d in [src, lbl]]
 
-            # lblFromPi = planeInfo2Lbl(pi, stdShape)
+            lblFromPi = planeInfo2Lbl(pi, stdShape)
             lblhat = planeInfo2Lbl(pihat, stdShape)
             npp.subplot(i, 0)
             plt.title(PI2Str(pi))
@@ -396,7 +396,7 @@ def viewmodel(model, device, datasetusing):
                 np.array(
                     [
                         lbl,
-                        # lblFromPi,
+                        lblFromPi,
                         np.zeros_like(lbl),
                         lblhat,
                     ]

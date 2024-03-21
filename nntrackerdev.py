@@ -119,10 +119,10 @@ def calclose(pi, pihat):
         requires_grad=False,
     )
     # enphasize wing span
-    coef[:, 3] = 3
+    coef[:, 3] = 1.5
     # dont estimate pos and size when is no object
     coef[isObj != 1, 1:] = 0
-    coef[isObj != 1, 0] = 3
+    coef[isObj != 1, 0] = 4.5
 
     loss = torch.sum(((pihat - pi) ** 2) * coef)
     # loss = torch.log10(loss + 1e-10)
@@ -183,7 +183,7 @@ if __name__ == "__main__":
 
 
 # %% view effect
-viewmodel(datasetusing=test_data)
+viewmodel(model, device, datasetusing=test_data)
 
 # %%
 os.system("pause")
