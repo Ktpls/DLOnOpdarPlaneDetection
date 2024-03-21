@@ -174,11 +174,34 @@ class NonAffineTorchAutoAugment(torchvision.transforms.AutoAugment):
         return policies
 
 
+class AffineMats:
+    zoom = lambda rate: np.array(
+        [[rate, 0, 0], [0, rate, 0], [0, 0, 1]],
+        dtype=np.float32,
+    )
+    shift = lambda x, y: np.array(
+        [[1, 0, x], [0, 1, y], [0, 0, 1]],
+        dtype=np.float32,
+    )
+    flip = lambda lr, ud: np.array(
+        [[lr, 0, 0], [0, ud, 0], [0, 0, 1]],
+        dtype=np.float32,
+    )
+    rot = lambda the: np.array(
+        [[np.cos(the), np.sin(the), 0], [-np.sin(the), np.cos(the), 0], [0, 0, 1]],
+        dtype=np.float32,
+    )
+    identity = lambda: np.array(
+        [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+        dtype=np.float32,
+    )
+
+
 def safeAffineAug(spl, lbl):
     lbl = NormalizeImgToChanneled_CvFormat(lbl)
     lblSurface = np.sum(lbl)
     h, w, c = spl.shape
-    wh = [w, h]
+    wh = np.array([w, h])
     rounds = 0
     while True:
         theta = np.random.uniform(-np.pi / 2, np.pi / 2)
@@ -186,33 +209,13 @@ def safeAffineAug(spl, lbl):
         ifflip = np.random.choice([1, -1], size=2, replace=True)
         movvec = np.random.uniform(-0.5, 0.5, size=2) * [w, h]
 
-        zoom = lambda rate: np.array(
-            [[rate, 0, 0], [0, rate, 0], [0, 0, 1]],
-            dtype=np.float32,
-        )
-        shift = lambda x, y: np.array(
-            [[1, 0, x], [0, 1, y], [0, 0, 1]],
-            dtype=np.float32,
-        )
-        flip = lambda lr, ud: np.array(
-            [[lr, 0, 0], [0, ud, 0], [0, 0, 1]],
-            dtype=np.float32,
-        )
-        rot = lambda the: np.array(
-            [[np.cos(the), np.sin(the), 0], [-np.sin(the), np.cos(the), 0], [0, 0, 1]],
-            dtype=np.float32,
-        )
-        identity = lambda: np.array(
-            [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
-            dtype=np.float32,
-        )
         trMat = (
-            shift(0.5 * w, 0.5 * h)
-            @ shift(*movvec)
-            @ flip(*ifflip)
-            @ zoom(zoomrate)
-            @ rot(theta)
-            @ shift(-0.5 * w, -0.5 * h)
+            AffineMats.shift(*(0.5 * wh))
+            @ AffineMats.shift(*movvec)
+            @ AffineMats.flip(*ifflip)
+            @ AffineMats.zoom(zoomrate)
+            @ AffineMats.rot(theta)
+            @ AffineMats.shift(*(-0.5 * wh))
         )[0:2, :]
 
         spl1 = cv.warpAffine(
@@ -255,26 +258,21 @@ def safeAffineAug(spl, lbl):
             continue
 
 
-def noiseAugment(m):
-    # rand line
-    def draw_random_line(image, n):
-        height, width, _ = image.shape
-        color = (0, 0, 0)  # Black color
-        for l in range(n):
-            start_point = (np.random.randint(0, width), np.random.randint(0, height))
-            end_point = (np.random.randint(0, width), np.random.randint(0, height))
-            cv.line(image, start_point, end_point, color, 1)
-        return image
+def draw_random_line(image, n):
+    image = np.ascontiguousarray(image)
+    height, width, _ = image.shape
+    color = (0, 0, 0)  # Black color
+    for l in range(n):
+        start_point = (np.random.randint(0, width), np.random.randint(0, height))
+        end_point = (np.random.randint(0, width), np.random.randint(0, height))
+        cv.line(image, start_point, end_point, color, 1)
+    return image
 
-    m = draw_random_line(m, 5)
 
-    def gaussianNoise(src):
-        noise = np.random.normal(0, 0.1, src.shape) * (src.max())
-        src = np.clip(src + noise, 0, 1, dtype=np.float32)
-        return src
-
-    m = gaussianNoise(m)
-    return m
+def gaussianNoise(src):
+    noise = np.random.normal(0, 0.1, src.shape) * (src.max())
+    src = np.clip(src + noise, 0, 1, dtype=np.float32)
+    return src
 
 
 class labeldataset(torch.utils.data.Dataset):
@@ -336,11 +334,13 @@ class labeldataset(torch.utils.data.Dataset):
 
         spl, lbl = safeAffineAug(spl, lbl)
 
+        spl = draw_random_line(spl, np.random.randint(-3, 5))
+
         spl = self.totensor(spl)
         spl = self.augger(spl)
         spl = tensorimg2ndarray(spl)
 
-        spl = noiseAugment(np.ascontiguousarray(spl))
+        spl = gaussianNoise(spl)
 
         return SampleItem("", spl, lbl, lbl2PlaneInfo(lbl))
 

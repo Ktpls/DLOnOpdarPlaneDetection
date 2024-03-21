@@ -37,9 +37,6 @@ model = getmodel(
         # "layer4",
     ),
 )
-writer = SummaryWriter(
-    f"runs/{time.strftime('%Y-%m-%d-%H-%M-%S', time.localtime())}"
-)  # 存放log文件的目录
 
 # %% dataset
 
@@ -177,7 +174,6 @@ trainpipe.train(
 savemodel(model, modelpath)
 
 # %%
-writer.close()
 if __name__ == "__main__":
     exit()
 
