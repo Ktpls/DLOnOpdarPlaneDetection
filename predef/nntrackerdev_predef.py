@@ -174,59 +174,75 @@ class NonAffineTorchAutoAugment(torchvision.transforms.AutoAugment):
         return policies
 
 
-def affineAugment(m, theta, zoomrate, ifflip, movvec):
+def safeAffineAug(spl, lbl):
+    lbl = NormalizeImgToChanneled_CvFormat(lbl)
+    lblSurface = np.sum(lbl)
+    h, w, c = spl.shape
+    wh = [w, h]
+    rounds = 0
+    while True:
+        theta = np.random.uniform(-np.pi / 2, np.pi / 2)
+        zoomrate = np.random.uniform(0.75, 1.25)
+        ifflip = np.random.choice([1, -1], size=2, replace=True)
+        movvec = np.random.uniform(-0.5, 0.5, size=2) * [w, h]
 
-    zoom = lambda rate: np.array(
-        [[rate, 0, 0], [0, rate, 0], [0, 0, 1]],
-        dtype=np.float32,
-    )
-    shift = lambda x, y: np.array(
-        [[1, 0, x], [0, 1, y], [0, 0, 1]],
-        dtype=np.float32,
-    )
-    flip = lambda lr, ud: np.array(
-        [[lr, 0, 0], [0, ud, 0], [0, 0, 1]],
-        dtype=np.float32,
-    )
-    rot = lambda the: np.array(
-        [[np.cos(the), np.sin(the), 0], [-np.sin(the), np.cos(the), 0], [0, 0, 1]],
-        dtype=np.float32,
-    )
-    identity = lambda: np.array(
-        [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
-        dtype=np.float32,
-    )
-
-    h, w, c = m.shape
-
-    m = cv.warpAffine(
-        m,
-        (
+        zoom = lambda rate: np.array(
+            [[rate, 0, 0], [0, rate, 0], [0, 0, 1]],
+            dtype=np.float32,
+        )
+        shift = lambda x, y: np.array(
+            [[1, 0, x], [0, 1, y], [0, 0, 1]],
+            dtype=np.float32,
+        )
+        flip = lambda lr, ud: np.array(
+            [[lr, 0, 0], [0, ud, 0], [0, 0, 1]],
+            dtype=np.float32,
+        )
+        rot = lambda the: np.array(
+            [[np.cos(the), np.sin(the), 0], [-np.sin(the), np.cos(the), 0], [0, 0, 1]],
+            dtype=np.float32,
+        )
+        identity = lambda: np.array(
+            [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+            dtype=np.float32,
+        )
+        trMat = (
             shift(0.5 * w, 0.5 * h)
             @ shift(*movvec)
             @ flip(*ifflip)
             @ zoom(zoomrate)
             @ rot(theta)
             @ shift(-0.5 * w, -0.5 * h)
-        )[0:2, :],
-        np.flip(m.shape[0:2]),
-        borderMode=cv.BORDER_REPLICATE,
-    )
-    return m
+        )[0:2, :]
 
+        spl1 = cv.warpAffine(
+            spl,
+            trMat,
+            wh,
+            borderMode=cv.BORDER_REPLICATE,
+        )
 
-def safeAffineAug(spl, lbl):
-    lbl = NormalizeImgToChanneled_CvFormat(lbl)
-    lblSurface = np.sum(lbl)
-    h, w, c = spl.shape
-    while True:
-        theta = np.random.uniform(-np.pi / 2, np.pi / 2)
-        zoomrate = np.random.uniform(0.75, 1.25)
-        ifflip = np.random.choice([1, -1], size=2, replace=True)
-        movvec = np.random.uniform(-0.5, 0.5, size=2) * [w, h]
-        # movvec = np.array([0, 0])
-        spl1 = affineAugment(spl, theta, zoomrate, ifflip, movvec)
-        lbl1 = affineAugment(lbl, theta, zoomrate, ifflip, movvec)
+        lbl1 = cv.warpAffine(
+            lbl,
+            trMat,
+            wh,
+            borderMode=cv.BORDER_REPLICATE,
+        )
+
+        lblNonReplicated = cv.warpAffine(
+            lbl,
+            trMat,
+            wh,
+            borderMode=cv.BORDER_CONSTANT,
+            borderValue=0,
+        )
+        rounds += 1
+        if rounds >= 10:
+            raise ValueError("too many regenerations!")
+
+        if np.sum(np.abs(lblNonReplicated - lbl1)) / (np.sum(lbl1) + 1) >= 0.2:
+            continue
+
         lbl1 = np.where(lbl1 > 0.5, 1.0, 0.0).astype(np.float32)
         expectedSurface = lblSurface * zoomrate
         insightRate = np.sum(lbl1) / expectedSurface
@@ -236,7 +252,7 @@ def safeAffineAug(spl, lbl):
             # consider as no plane
             return spl1, np.zeros_like(lbl1)
         else:
-            pass
+            continue
 
 
 def noiseAugment(m):
@@ -250,7 +266,7 @@ def noiseAugment(m):
             cv.line(image, start_point, end_point, color, 1)
         return image
 
-    # m = draw_random_line(m, 5)
+    m = draw_random_line(m, 5)
 
     def gaussianNoise(src):
         noise = np.random.normal(0, 0.1, src.shape) * (src.max())
