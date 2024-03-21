@@ -253,7 +253,7 @@ def noiseAugment(m):
     # m = draw_random_line(m, 5)
 
     def gaussianNoise(src):
-        noise = np.random.normal(0, 0.1, src.shape) * (src.max() - src.min())
+        noise = np.random.normal(0, 0.1, src.shape) * (src.max())
         src = np.clip(src + noise, 0, 1, dtype=np.float32)
         return src
 
