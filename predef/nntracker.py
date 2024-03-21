@@ -2,9 +2,6 @@
 # basics
 from .nntrackerdev_predef import *
 
-print(getDeviceInfo())
-device = "cuda" if torch.cuda.is_available() else "cpu"
-print(f"Using {device} device")
 # %%
 # nn def
 
@@ -177,8 +174,10 @@ class nntracker_respi(torch.nn.Module):
             res_through(
                 nn.Linear(backboneOutShape, backboneOutShape),
                 nn.LeakyReLU(),
+                nn.Dropout(),
                 nn.Linear(backboneOutShape, backboneOutShape),
                 nn.LeakyReLU(),
+                nn.Dropout(),
             ),
             nn.Linear(backboneOutShape, 4),
             nn.LeakyReLU(),
@@ -200,10 +199,14 @@ class nntracker_respi(torch.nn.Module):
         return out
 
 
-def getmodel(modelpath, **kwargs):
+def getmodel(modelpath, device, **kwargs):
     model = setModule(nntracker_respi(**kwargs), path=modelpath, device=device)
     # print(model)
     return model
 
 
-# %%
+def getDevice():
+    print(getDeviceInfo())
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"Using {device} device")
+    return device

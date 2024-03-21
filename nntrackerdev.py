@@ -21,9 +21,11 @@ else:
     datasetroot = r"/kaggle/input/nntrackerle2renh"
 
 # %%  nn def
+device = getDevice()
 modelpath = r"nntracker.pth"
 model = getmodel(
     modelpath,
+    device,
     frozenLayers=(
         "conv1",
         "bn1",
