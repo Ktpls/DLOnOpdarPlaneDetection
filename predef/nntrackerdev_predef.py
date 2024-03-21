@@ -232,7 +232,7 @@ def safeAffineAug(spl, lbl):
         insightRate = np.sum(lbl1) / expectedSurface
         if insightRate >= 0.6:
             return spl1, lbl1
-        elif insightRate <= 0.2:
+        elif insightRate <= 0.3:
             # consider as no plane
             return spl1, np.zeros_like(lbl1)
         else:
