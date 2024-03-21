@@ -310,7 +310,7 @@ class labeldataset(torch.utils.data.Dataset):
 
         spl = noiseAugment(np.ascontiguousarray(spl))
 
-        return SampleItem("", spl, lbl, lbl2PlaneInfo(item.lbl))
+        return SampleItem("", spl, lbl, lbl2PlaneInfo(lbl))
 
     def procItemToTensor(self, item):
         return (
@@ -386,7 +386,7 @@ def viewmodel(model, device, datasetusing):
             pi = pi.numpy()
             src, lbl = [tensorimg2ndarray(d) for d in [src, lbl]]
 
-            lblFromPi = planeInfo2Lbl(pi, stdShape)
+            # lblFromPi = planeInfo2Lbl(pi, stdShape)
             lblhat = planeInfo2Lbl(pihat, stdShape)
             npp.subplot(i, 0)
             plt.title(PI2Str(pi))
@@ -396,8 +396,8 @@ def viewmodel(model, device, datasetusing):
                 np.array(
                     [
                         lbl,
-                        lblFromPi,
-                        #np.zeros_like(lbl),
+                        # lblFromPi,
+                        np.zeros_like(lbl),
                         lblhat,
                     ]
                 )
