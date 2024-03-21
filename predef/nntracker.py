@@ -201,7 +201,7 @@ class nntracker_respi(torch.nn.Module):
 
 def getmodel(modelpath, device, **kwargs):
     model = setModule(nntracker_respi(**kwargs), path=modelpath, device=device)
-    # print(model)
+    print(model)
     return model
 
 
