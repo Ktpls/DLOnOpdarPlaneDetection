@@ -76,12 +76,10 @@ class SemanticInjectionModule(torch.nn.Module):
 class AddPositionalEmbedding(nn.Module):
     def __init__(self, shape, depth, len_max=None):
         super().__init__()
-        self.pe = nn.Parameter(
-            torch.tensor(
-                PositionalEmbedding2D(shape, depth, len_max),
-                dtype=torch.float32,
-                requires_grad=False,
-            )
+        self.pe = torch.tensor(
+            PositionalEmbedding2D(shape, depth, len_max),
+            dtype=torch.float32,
+            requires_grad=False,
         )
 
     def forward(self, x):
@@ -142,8 +140,10 @@ class nntracker_pi(torch.nn.Module):
             nn.Flatten(1, -1),
             nn.Linear(64 * 16**2, 4096),
             nn.LeakyReLU(),
+            nn.Dropout(),
             nn.Linear(4096, 1000),
             nn.LeakyReLU(),
+            nn.Dropout(),
             nn.Linear(1000, 4),
             nn.LeakyReLU(),
         )
@@ -218,8 +218,8 @@ class nntracker_respi(ParameterRequiringGradModule):
         return out
 
 
-def getmodel(modelpath, device, **kwargs):
-    model = setModule(nntracker_respi(**kwargs), path=modelpath, device=device)
+def getmodel(model0, modelpath, device):
+    model = setModule(model0, path=modelpath, device=device)
     print(model)
     return model
 

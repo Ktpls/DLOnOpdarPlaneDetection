@@ -24,18 +24,21 @@ else:
 device = getDevice()
 modelpath = r"nntracker.pth"
 model = getmodel(
+    nntracker_pi(),
+    # nntracker_respi(
+    #     frozenLayers=(
+    #         "conv1",
+    #         "bn1",
+    #         "relu",
+    #         "maxpool",
+    #         "layer1",
+    #         "layer2",
+    #         "layer3",
+    #         # "layer4",
+    #     ),
+    # ),
     modelpath,
     device,
-    # frozenLayers=(
-    #     "conv1",
-    #     "bn1",
-    #     "relu",
-    #     "maxpool",
-    #     "layer1",
-    #     "layer2",
-    #     "layer3",
-    #     # "layer4",
-    # ),
 )
 
 # %% dataset
