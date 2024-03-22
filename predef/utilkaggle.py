@@ -3,6 +3,7 @@ from datetime import datetime
 from torch import nn
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+import torchvision.transforms.functional as TTF
 import cv2 as cv
 import dataclasses
 import functools
@@ -16,6 +17,7 @@ import time
 import torch
 import torchvision
 import typing
+import enum
 
 
 def NormalizeImgToChanneled_CvFormat(m:cv.Mat):

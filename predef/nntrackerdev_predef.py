@@ -276,6 +276,11 @@ def gaussianNoise(src):
 
 
 class labeldataset(torch.utils.data.Dataset):
+    class AugSteps(enum.Enum):
+        affine = 0
+        randLine = 1
+        autoaug = 2
+        gausNoise = 3
 
     def __init__(self) -> None:
         super().__init__()
@@ -288,12 +293,10 @@ class labeldataset(torch.utils.data.Dataset):
         pathtype="fld",
         sheetname=None,
         stdShape=None,
-        rtDataAugOn=None,
+        augSteps=list(),
     ):
         self.size = size
-        if rtDataAugOn is None:
-            rtDataAugOn = False
-        self.rtDataAugOn = rtDataAugOn
+        self.augSteps = {s: True for s in augSteps}
         selection = Xls2ListList(selection, sheetname)
         selection = [s[0] for s in selection]
         selection = [s for s in selection if s is not None]
@@ -329,18 +332,22 @@ class labeldataset(torch.utils.data.Dataset):
     def __len__(self):
         return self.size
 
-    def rtDataAug(self, item: SampleItem):
+    def dataAug(self, item: SampleItem):
         spl, lbl = item.spl, item.lbl
 
-        spl, lbl = safeAffineAug(spl, lbl)
+        if labeldataset.AugSteps.affine in self.augSteps:
+            spl, lbl = safeAffineAug(spl, lbl)
 
-        spl = draw_random_line(spl, np.random.randint(-3, 5))
+        if labeldataset.AugSteps.randLine in self.augSteps:
+            spl = draw_random_line(spl, np.random.randint(-3, 5))
 
-        spl = self.totensor(spl)
-        spl = self.augger(spl)
-        spl = tensorimg2ndarray(spl)
+        if labeldataset.AugSteps.autoaug in self.augSteps:
+            spl = self.totensor(spl)
+            spl = self.augger(spl)
+            spl = tensorimg2ndarray(spl)
 
-        spl = gaussianNoise(spl)
+        if labeldataset.AugSteps.gausNoise in self.augSteps:
+            spl = gaussianNoise(spl)
 
         return SampleItem("", spl, lbl, lbl2PlaneInfo(lbl))
 
@@ -354,8 +361,7 @@ class labeldataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         index = self.rndIndex()
         item = self.items[index]
-        if self.rtDataAugOn:
-            item = self.rtDataAug(item)
+        item = self.dataAug(item)
         tup = self.procItemToTensor(item)
         return tup
 

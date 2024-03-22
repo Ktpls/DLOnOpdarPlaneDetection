@@ -26,16 +26,16 @@ modelpath = r"nntracker.pth"
 model = getmodel(
     modelpath,
     device,
-    frozenLayers=(
-        "conv1",
-        "bn1",
-        "relu",
-        "maxpool",
-        "layer1",
-        "layer2",
-        "layer3",
-        # "layer4",
-    ),
+    # frozenLayers=(
+    #     "conv1",
+    #     "bn1",
+    #     "relu",
+    #     "maxpool",
+    #     "layer1",
+    #     "layer2",
+    #     "layer3",
+    #     # "layer4",
+    # ),
 )
 
 # %% dataset
@@ -49,7 +49,7 @@ class NnTrackerDataset:
 
 
 print("loading dataset")
-datasetname = "largeEnoughToRecon"
+datasetname = "LE2REnh"
 datasets = {
     "LE2REnh": NnTrackerDataset(r"LE2REnh/LE2REnh.zip", r"LE2REnh/all.xlsx", "zip"),
     "SmallAug": NnTrackerDataset(r"SmallAug/SmallAug.zip", r"SmallAug/all.xlsx", "zip"),
@@ -72,7 +72,9 @@ train_data = labeldataset().init(
     train_data.datasettype,
     None,
     stdShape,
-    rtDataAugOn=True,
+    augSteps=[
+        labeldataset.AugSteps.gausNoise,
+    ],
 )
 test_data = datasets["largeEnoughToRecon"]
 test_data = labeldataset().init(
@@ -82,7 +84,9 @@ test_data = labeldataset().init(
     test_data.datasettype,
     None,
     stdShape,
-    rtDataAugOn=True,
+    augSteps=[
+        labeldataset.AugSteps.gausNoise,
+    ],
 )
 print("load finished")
 
@@ -161,11 +165,12 @@ def onoutput(batch, aveerr):
 trainpipe.train(
     train_dataloader,
     torch.optim.AdamW(
-        filter(lambda x: x.requires_grad is not False, model.parameters()),
+        model.parameters(),
         lr=1e-4,
         weight_decay=1e-2,
     ),
     trainmainprogress,
+    epochnum=10,
     customSubOnOutput=onoutput,
 )
 

@@ -9,6 +9,14 @@ from .nntrackerdev_predef import *
 # nn def
 
 
+class ParameterRequiringGradModule(torch.nn.Module):
+    def parameters(
+        self, recurse: bool = True
+    ) -> typing.Iterator[torch.nn.parameter.Parameter]:
+        return filter(
+            lambda x: x.requires_grad is not False, super().parameters(recurse)
+        )
+
 
 def PositionalEmbedding2D(shape, depth, len_max=None):
     if len_max is None:
@@ -90,8 +98,13 @@ class PermuteModule(nn.Module):
 
 
 class nntracker_pi(torch.nn.Module):
+    resize_size = 128
+    interpolation = torchvision.transforms.InterpolationMode.BILINEAR
+    antialias = True
+
     def __init__(self):
         super().__init__()
+
         useBn = True
         incver = "v3"
         self.mod = nn.Sequential(
@@ -136,11 +149,17 @@ class nntracker_pi(torch.nn.Module):
         )
 
     def forward(self, m):
+        m = TTF.resize(
+            m,
+            size=nntracker_pi.resize_size,
+            interpolation=nntracker_pi.interpolation,
+            antialias=nntracker_pi.antialias,
+        )
         out = self.mod(m)
         return out
 
 
-class nntracker_respi(torch.nn.Module):
+class nntracker_respi(ParameterRequiringGradModule):
     def __init__(
         self,
         frozenLayers=(
@@ -200,7 +219,7 @@ class nntracker_respi(torch.nn.Module):
 
 
 def getmodel(modelpath, device, **kwargs):
-    model = setModule(nntracker_respi(**kwargs), path=modelpath, device=device)
+    model = setModule(nntracker_pi(**kwargs), path=modelpath, device=device)
     print(model)
     return model
 
