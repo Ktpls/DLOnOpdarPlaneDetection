@@ -219,7 +219,7 @@ class nntracker_respi(ParameterRequiringGradModule):
 
 
 def getmodel(modelpath, device, **kwargs):
-    model = setModule(nntracker_pi(**kwargs), path=modelpath, device=device)
+    model = setModule(nntracker_respi(**kwargs), path=modelpath, device=device)
     print(model)
     return model
 
