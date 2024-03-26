@@ -273,7 +273,7 @@ def draw_random_line(image, n):
 
 
 def gaussianNoise(src):
-    sig = np.random.uniform(-0.1, 0.2)
+    sig = np.random.uniform(-0.01, 0.2)
     if sig >= EPS:
         noise = np.random.normal(0, sig, src.shape)
         src = np.clip(src + noise, 0, 1, dtype=np.float32)
@@ -302,33 +302,36 @@ class labeldataset(torch.utils.data.Dataset):
     ):
         self.size = size
         self.augSteps = {s: True for s in augSteps}
-        selection = Xls2ListList(selection, sheetname)
-        selection = [s[0] for s in selection]
-        selection = [s for s in selection if s is not None]
-        self.names = selection
-        reader: ImgReader = None
-        if pathtype == "fld":
-            reader = ImgReaderFolder(path)
-        elif pathtype == "zip":
-            reader = ImgReaderZip(path)
+        if selection is not None:
+            selection = Xls2ListList(selection, sheetname)
+            selection = [s[0] for s in selection]
+            selection = [s for s in selection if s is not None]
+            self.names = selection
+            reader: ImgReader = None
+            if pathtype == "fld":
+                reader = ImgReaderFolder(path)
+            elif pathtype == "zip":
+                reader = ImgReaderZip(path)
+            else:
+                raise TypeError(f"inproper path type {pathtype}")
+
+            items = []
+            prog = Progress(len(selection))
+            for i, p in enumerate(selection):
+                spl = reader.read(f"spl/{p}")
+                lbl = reader.read(f"lbl/{p}")
+
+                if stdShape is not None:
+                    spl = cv.resize(spl, stdShape)
+                    lbl = cv.resize(lbl, stdShape)
+                    lbl = cv.threshold(lbl[:, :, 0:1], 0.5, 1, cv.THRESH_BINARY)[1]
+                pi = lbl2PlaneInfo(lbl)
+                items.append(SampleItem(p, spl, lbl, pi))
+                prog.update(i)
+            self.items = items
+            prog.setFinish()
         else:
-            raise TypeError(f"inproper path type {pathtype}")
-
-        items = []
-        prog = Progress(len(selection))
-        for i, p in enumerate(selection):
-            spl = reader.read(f"spl/{p}")
-            lbl = reader.read(f"lbl/{p}")
-
-            if stdShape is not None:
-                spl = cv.resize(spl, stdShape)
-                lbl = cv.resize(lbl, stdShape)
-                lbl = cv.threshold(lbl[:, :, 0:1], 0.5, 1, cv.THRESH_BINARY)[1]
-            pi = lbl2PlaneInfo(lbl)
-            items.append(SampleItem(p, spl, lbl, pi))
-            prog.update(i)
-        self.items = items
-        prog.setFinish()
+            self.items = list()
         self.augger = NonAffineTorchAutoAugment()
         self.totensor = torchvision.transforms.ToTensor()
 
@@ -419,8 +422,10 @@ class MassivePicturePlot:
     def isFull(self):
         return self.i > np.prod(self.plotShape)
 
+
 def PI2Str(pi):
     return ",".join([f"{i:.2f}" for i in pi])
+
 
 def viewmodel(model, device, datasetusing):
     model.eval()
@@ -430,7 +435,6 @@ def viewmodel(model, device, datasetusing):
     imshowconfig = {"vmin": 0, "vmax": 1}
     totalinferencetime = 0
     infercount = 0
-
 
     with torch.no_grad():
         for i in range(samplenum):
@@ -444,8 +448,6 @@ def viewmodel(model, device, datasetusing):
             pi = pi.numpy()
             src, lbl = [tensorimg2ndarray(d) for d in [src, lbl]]
 
-            lblFromPi = planeInfo2Lbl(pi, stdShape)
-            lblhat = planeInfo2Lbl(pihat, stdShape)
             mpp.toNextPlot()
             plt.title(PI2Str(pi))
             plt.imshow(cv.cvtColor(src, cv.COLOR_BGR2RGB))
@@ -455,9 +457,9 @@ def viewmodel(model, device, datasetusing):
                 np.array(
                     [
                         lbl,
-                        lblFromPi,
-                        # np.zeros_like(lbl),
-                        lblhat,
+                        # planeInfo2Lbl(pi, stdShape),
+                        np.zeros_like(lbl),
+                        planeInfo2Lbl(pihat, stdShape),
                     ]
                 )
                 .squeeze(-1)
@@ -467,6 +469,31 @@ def viewmodel(model, device, datasetusing):
             plt.title(PI2Str(pihat))
             plt.imshow(lblComparasion, label="lblComparasion", **imshowconfig)
     print(f"average inference time={totalinferencetime / samplenum}")
+
+
+def findBads(model, calclose, device, datasetFrom, datasetTo, numDesired, thresh):
+    model.eval()
+    badFound = 0
+    sampleItered = 0
+    prog = Progress(numDesired)
+    with torch.no_grad():
+        while True:
+            if badFound >= numDesired:
+                break
+            prog.update(badFound)
+            index = datasetFrom.rndIndex()
+            item = datasetFrom.items[index]
+            item = datasetFrom.dataAug(item)
+            tup = datasetFrom.procItemToTensor(item)
+            src, lbl, pi = tup
+            pihat = model.forward(src.reshape((1,) + src.shape).to(device))[0]
+            loss = calclose(pi.reshape((1,) + pi.shape).to(device), pihat.to(device))
+            if loss.item() > thresh:
+                datasetTo.items.append(item)
+                badFound += 1
+            sampleItered += 1
+    prog.setFinish()
+    print(f"{badFound=}, {sampleItered=}")
 
 
 def savemodel(model, path):

@@ -91,20 +91,18 @@ test_data = labeldataset().init(
     None,
     stdShape,
     augSteps=[
-        labeldataset.AugSteps.gausNoise,
+        # labeldataset.AugSteps.gausNoise,
     ],
 )
-# wrongs_data = labeldataset().init(
-#     None,
-#     None,
-#     8192,
-#     None,
-#     None,
-#     stdShape,
-#     augSteps=[
-#         labeldataset.AugSteps.gausNoise,
-#     ],
-# )
+bad_data = labeldataset().init(
+    None,
+    None,
+    8192,
+    None,
+    None,
+    stdShape,
+    augSteps=[],
+)
 print("load finished")
 
 # %%  dataloader
@@ -200,40 +198,7 @@ if __name__ == "__main__":
 
 
 # %% view effect
-viewmodel(model, device, datasetusing=train_data)
-
-
-# %%
-def findBads(model, device, datasetusing):
-    mpp = MassivePicturePlot([7, 8])
-    model.eval()
-    with torch.no_grad():
-        while True:
-            if mpp.isFull():
-                break
-            src, lbl, pi = datasetusing[0]
-            pihat = model.forward(src.reshape((1,) + src.shape).to(device))[0]
-            loss = calclose(pi.reshape((1,) + pi.shape).to(device), pihat.to(device))
-            if loss.item() > 0.1:
-                mpp.toNextPlot()
-                plt.title(PI2Str(pi))
-                plt.imshow(cv.cvtColor(tensorimg2ndarray(src), cv.COLOR_BGR2RGB))
-
-                mpp.toNextPlot()
-                lblComparasion = (
-                    np.array(
-                        [
-                            tensorimg2ndarray(lbl),
-                            planeInfo2Lbl(pi.cpu().numpy(), stdShape),
-                            planeInfo2Lbl(pihat.cpu().numpy(), stdShape),
-                        ]
-                    )
-                    .squeeze(-1)
-                    .transpose([1, 2, 0])
-                )
-                plt.title(PI2Str(pihat))
-                plt.imshow(lblComparasion, label="lblComparasion")
-findBads(model, device, datasetusing=train_data)
+viewmodel(model, device, datasetusing=bad_data)
 
 
 # %%
