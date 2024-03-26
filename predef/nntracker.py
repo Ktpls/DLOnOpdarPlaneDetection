@@ -76,10 +76,12 @@ class SemanticInjectionModule(torch.nn.Module):
 class AddPositionalEmbedding(nn.Module):
     def __init__(self, shape, depth, len_max=None):
         super().__init__()
-        self.pe = torch.tensor(
-            PositionalEmbedding2D(shape, depth, len_max),
-            dtype=torch.float32,
-            requires_grad=False,
+        self.pe = nn.Parameter(
+            torch.tensor(
+                PositionalEmbedding2D(shape, depth, len_max),
+                dtype=torch.float32,
+                requires_grad=False,
+            )
         )
 
     def forward(self, x):
@@ -216,12 +218,12 @@ class nntracker_pi(torch.nn.Module):
             interpolation=nntracker_pi.interpolation,
             antialias=nntracker_pi.antialias,
         )
-        s0=self.scale0.zoom(m)
-        s1=self.scale1.zoom(s0)
-        s2=self.scale2.zoom(s1)
-        s0=self.scale0.proc(s0)
-        s1=self.scale1.proc(s1)
-        s2=self.scale2.proc(s2)
+        s0 = self.scale0.zoom(m)
+        s1 = self.scale1.zoom(s0)
+        s2 = self.scale2.zoom(s1)
+        s0 = self.scale0.proc(s0)
+        s1 = self.scale1.proc(s1)
+        s2 = self.scale2.proc(s2)
         out = torch.concat([s0, s1, s2], dim=1)
         out = self.head(out)
         return out
