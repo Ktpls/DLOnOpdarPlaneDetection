@@ -243,7 +243,7 @@ def safeAffineAug(spl, lbl):
             borderValue=0,
         )
         rounds += 1
-        if rounds >= 10:
+        if rounds >= 20:
             raise ValueError("too many regenerations!")
 
         if np.sum(np.abs(lblNonReplicated - lbl1)) / (np.sum(lbl1) + 1) >= 0.2:

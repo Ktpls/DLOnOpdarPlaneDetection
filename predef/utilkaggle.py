@@ -20,8 +20,9 @@ import typing
 import enum
 
 
-def NormalizeImgToChanneled_CvFormat(m:cv.Mat):
+def NormalizeImgToChanneled_CvFormat(m: cv.Mat):
     return m if len(m.shape) == 3 else m.reshape(m.shape + (1,))
+
 
 def Xls2ListList(path=None, sheetname=None, killNones=True):
     if path is None:
@@ -54,21 +55,45 @@ def batchsizeof(tensor):
 
 
 def getDeviceInfo():
-    # Get CPU info
-    cpu_info = platform.processor()
-    num_cores = os.cpu_count()
-    cpu_frequency = "Not available in Python standard library"
-
-    # Get GPU info
     try:
-        gpu_info = torch.cuda.get_device_name()
-    except:
-        gpu_info = "No GPU detected"
+        import psutil
 
-    return (
-        f"CPU Info: {cpu_info}, Cores: {num_cores}, Frequency: {cpu_frequency}\n"
-        + f"GPU Info: {gpu_info}"
-    )
+        # 获取CPU信息
+        cpu_count = psutil.cpu_count(logical=False)  # 物理核心数
+        threads_count = psutil.cpu_count(logical=True)  # 逻辑线程数
+        cpu_freq = psutil.cpu_freq()  # CPU频率信息
+        architecture = platform.architecture()[0]
+        processor = platform.processor()
+        mem = psutil.virtual_memory()
+        cpuInfo = (
+            f"CPU总内存: {mem.total/1024**3} GB\n\n"
+            + f"CPU可用内存: {mem.available/1024**3} GB\n"
+            + f"CPU使用率: {mem.percent}%\n"
+            + f"CPU物理核心数: {cpu_count}\n"
+            + f"CPU逻辑线程数: {threads_count}\n"
+            + f"CPU 架构: {architecture}\n"
+            + f"CPU 型号: {processor}\n"
+            + f"CPU频率: 当前 {cpu_freq.current:.2f} MHz, 最小 {cpu_freq.min:.2f} MHz, 最大 {cpu_freq.max:.2f} MHz\n"
+        )
+    except ImportError:
+        # Get CPU info
+        cpu_info = platform.processor()
+        num_cores = os.cpu_count()
+        architecture = platform.architecture()[0]
+        processor = platform.processor()
+        cpu_frequency = "Not available in Python standard library"
+        cpuInfo = (
+            f"CPU Info: {cpu_info}, Cores: {num_cores}, Frequency: {cpu_frequency}\n"
+        )
+
+    try:
+        gpu_name = torch.cuda.get_device_name()
+    except:
+        gpu_name = "No GPU detected"
+    gpuInfo = f"GPU Name: {gpu_name}\n"
+
+    return f"{cpuInfo}\n" + f"{gpuInfo}"
+
 
 class nestedPyPlot:
 
@@ -387,8 +412,11 @@ class trainpipe:
         # win32api.Beep(1000, 1000)
         print("Done!")
 
+
 EPS = 1e-10
 import time
+
+
 class perf_statistic:
     """
     calculate the time past between start() to now, directly by perf_counter()-starttime
@@ -434,6 +462,8 @@ class perf_statistic:
         return (
             time.perf_counter() - self._starttime if self._starttime is not None else 0
         )
+
+
 class Progress:
     """
     irreversable!
@@ -469,10 +499,12 @@ class Progress:
 
     def setFinish(self):
         self.update(self.total)
-        
+
 
 def Deduplicate(l: list):
     return list(set(l))
+
+
 class Stream:
     content: list
     actions: list
