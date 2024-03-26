@@ -252,9 +252,9 @@ def safeAffineAug(spl, lbl):
         lbl1 = np.where(lbl1 > 0.5, 1.0, 0.0).astype(np.float32)
         expectedSurface = lblSurface * zoomrate
         insightRate = np.sum(lbl1) / expectedSurface
-        if insightRate >= 0.7:
+        if insightRate >= 0.8:
             return spl1, lbl1
-        elif insightRate <= 0.3:
+        elif insightRate <= 0.4:
             # consider as no plane
             return spl1, np.zeros_like(lbl1)
         else:
@@ -410,12 +410,17 @@ class MassivePicturePlot:
         self.i = 1
 
     def toNextPlot(self) -> plt.Axes:
-        if self.i > np.prod(self.plotShape):
+        if self.isFull():
             raise IndexError("Too many pictures")
         ax = self.fig.add_subplot(self.plotShape[0], self.plotShape[1], self.i)
         self.i += 1
         return ax
 
+    def isFull(self):
+        return self.i > np.prod(self.plotShape)
+
+def PI2Str(pi):
+    return ",".join([f"{i:.2f}" for i in pi])
 
 def viewmodel(model, device, datasetusing):
     model.eval()
@@ -426,8 +431,6 @@ def viewmodel(model, device, datasetusing):
     totalinferencetime = 0
     infercount = 0
 
-    def PI2Str(pi):
-        return ",".join([f"{i:.2f}" for i in pi])
 
     with torch.no_grad():
         for i in range(samplenum):

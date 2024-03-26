@@ -24,19 +24,19 @@ else:
 device = getDevice()
 modelpath = r"nntracker.pth"
 model = getmodel(
-    nntracker_pi(),
-    # nntracker_respi(
-    #     frozenLayers=(
-    #         "conv1",
-    #         "bn1",
-    #         "relu",
-    #         "maxpool",
-    #         "layer1",
-    #         "layer2",
-    #         "layer3",
-    #         # "layer4",
-    #     ),
-    # ),
+    # nntracker_pi(),
+    nntracker_respi(
+        frozenLayers=(
+            "conv1",
+            "bn1",
+            "relu",
+            "maxpool",
+            "layer1",
+            "layer2",
+            "layer3",
+            # "layer4",
+        ),
+    ),
     modelpath,
     device,
 )
@@ -76,6 +76,9 @@ train_data = labeldataset().init(
     None,
     stdShape,
     augSteps=[
+        labeldataset.AugSteps.affine,
+        labeldataset.AugSteps.randLine,
+        labeldataset.AugSteps.autoaug,
         labeldataset.AugSteps.gausNoise,
     ],
 )
@@ -91,13 +94,24 @@ test_data = labeldataset().init(
         labeldataset.AugSteps.gausNoise,
     ],
 )
+# wrongs_data = labeldataset().init(
+#     None,
+#     None,
+#     8192,
+#     None,
+#     None,
+#     stdShape,
+#     augSteps=[
+#         labeldataset.AugSteps.gausNoise,
+#     ],
+# )
 print("load finished")
 
 # %%  dataloader
 # for easier modify batchsize without reloading all samples
 batch_size = 2
-train_dataloader = DataLoader(train_data, batch_size=batch_size, num_workers=4)
-test_dataloader = DataLoader(test_data, batch_size=32, num_workers=4)
+train_dataloader = DataLoader(train_data, batch_size=batch_size, num_workers=0)
+test_dataloader = DataLoader(test_data, batch_size=32, num_workers=0)
 
 
 # %% lossFunc
@@ -127,9 +141,8 @@ def calclose(pi, pihat):
     # dont estimate pos and size when is no object
     coef[isObj != 1, 1:] = 0
     coef[isObj != 1, 0] = 4.5
-
-    loss = torch.sum(((pihat - pi) ** 2) * coef)
-    # loss = torch.log10(loss + 1e-10)
+    dist = ((pihat - pi) ** 2) * coef
+    loss = torch.sum(dist)
     return loss
 
 
@@ -187,7 +200,41 @@ if __name__ == "__main__":
 
 
 # %% view effect
-viewmodel(model, device, datasetusing=test_data)
+viewmodel(model, device, datasetusing=train_data)
+
+
+# %%
+def findBads(model, device, datasetusing):
+    mpp = MassivePicturePlot([7, 8])
+    model.eval()
+    with torch.no_grad():
+        while True:
+            if mpp.isFull():
+                break
+            src, lbl, pi = datasetusing[0]
+            pihat = model.forward(src.reshape((1,) + src.shape).to(device))[0]
+            loss = calclose(pi.reshape((1,) + pi.shape).to(device), pihat.to(device))
+            if loss.item() > 0.1:
+                mpp.toNextPlot()
+                plt.title(PI2Str(pi))
+                plt.imshow(cv.cvtColor(tensorimg2ndarray(src), cv.COLOR_BGR2RGB))
+
+                mpp.toNextPlot()
+                lblComparasion = (
+                    np.array(
+                        [
+                            tensorimg2ndarray(lbl),
+                            planeInfo2Lbl(pi.cpu().numpy(), stdShape),
+                            planeInfo2Lbl(pihat.cpu().numpy(), stdShape),
+                        ]
+                    )
+                    .squeeze(-1)
+                    .transpose([1, 2, 0])
+                )
+                plt.title(PI2Str(pihat))
+                plt.imshow(lblComparasion, label="lblComparasion")
+findBads(model, device, datasetusing=train_data)
+
 
 # %%
 os.system("pause")
