@@ -52,7 +52,7 @@ class NnTrackerDataset:
 
 
 print("loading dataset")
-datasetname = "LE2REnh"
+datasetname = "largeEnoughToRecon"
 datasets = {
     "LE2REnh": NnTrackerDataset(r"LE2REnh/LE2REnh.zip", r"LE2REnh/all.xlsx", "zip"),
     "SmallAug": NnTrackerDataset(r"SmallAug/SmallAug.zip", r"SmallAug/all.xlsx", "zip"),

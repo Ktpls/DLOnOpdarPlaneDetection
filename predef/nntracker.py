@@ -100,62 +100,129 @@ class nntracker_pi(torch.nn.Module):
     interpolation = torchvision.transforms.InterpolationMode.BILINEAR
     antialias = True
 
+    class CertainScale:
+        def __init__(self, zoom, proc) -> None:
+            self.zoom = zoom
+            self.proc = proc
+
     def __init__(self):
         super().__init__()
 
         useBn = True
         incver = "v3"
-        self.mod = nn.Sequential(
-            # 128
-            inception.even(3, 8, bn=useBn, version=incver),
-            res_through(
-                inception.even(8, 8, bn=useBn, version=incver),
-                inception.even(8, 8, bn=useBn, version=incver),
+        chanS0 = 8
+        sizeS0 = 64
+        chanS1 = 16
+        sizeS1 = 32
+        chanS2 = 32
+        sizeS2 = 16
+        self.scale0 = nntracker_pi.CertainScale(
+            zoom=nn.Sequential(
+                # 128
+                inception.even(3, chanS0, bn=useBn, version=incver),
+                res_through(
+                    inception.even(chanS0, chanS0, bn=useBn, version=incver),
+                    inception.even(chanS0, chanS0, bn=useBn, version=incver),
+                ),
+                nn.MaxPool2d(2),
+                # 64
             ),
-            nn.MaxPool2d(2),  # 64
-            inception.even(8, 16, bn=useBn, version=incver),
-            res_through(
-                inception.even(16, 16, bn=useBn, version=incver),
-                inception.even(16, 16, bn=useBn, version=incver),
+            proc=nn.Sequential(
+                res_through(
+                    inception.even(chanS0, chanS0, bn=useBn, version=incver),
+                    inception.even(chanS0, chanS0, bn=useBn, version=incver),
+                ),
+                PermuteModule((0, 2, 3, 1)),
+                nn.Flatten(1, 2),  # keep depth unflattened
+                AddPositionalEmbedding((sizeS0, sizeS0), chanS0, sizeS0),
+                nn.TransformerEncoderLayer(chanS0, chanS0 // 2, 16),
+                nn.TransformerEncoderLayer(chanS0, chanS0 // 2, 16),
+                nn.TransformerEncoderLayer(chanS0, chanS0 // 2, 16),
+                nn.TransformerEncoderLayer(chanS0, chanS0 // 2, 16),
+                nn.Flatten(1, -1),
             ),
-            nn.MaxPool2d(2),  # 32
-            inception.even(16, 32, bn=useBn, version=incver),
-            res_through(
-                inception.even(32, 32, bn=useBn, version=incver),
-                inception.even(32, 32, bn=useBn, version=incver),
+        )
+        self.scale1 = nntracker_pi.CertainScale(
+            zoom=nn.Sequential(
+                # 64
+                inception.even(chanS0, chanS1, bn=useBn, version=incver),
+                res_through(
+                    inception.even(chanS1, chanS1, bn=useBn, version=incver),
+                    inception.even(chanS1, chanS1, bn=useBn, version=incver),
+                ),
+                nn.MaxPool2d(2),
+                # 32
             ),
-            nn.MaxPool2d(2),  # 16
-            inception.even(32, 64, bn=useBn, version=incver),
-            res_through(
-                inception.even(64, 64, bn=useBn, version=incver),
-                inception.even(64, 64, bn=useBn, version=incver),
+            proc=nn.Sequential(
+                res_through(
+                    inception.even(chanS1, chanS1, bn=useBn, version=incver),
+                    inception.even(chanS1, chanS1, bn=useBn, version=incver),
+                ),
+                PermuteModule((0, 2, 3, 1)),
+                nn.Flatten(1, 2),
+                AddPositionalEmbedding((sizeS1, sizeS1), chanS1, sizeS1),
+                nn.TransformerEncoderLayer(chanS1, chanS1 // 2, 16),
+                nn.TransformerEncoderLayer(chanS1, chanS1 // 2, 16),
+                nn.TransformerEncoderLayer(chanS1, chanS1 // 2, 16),
+                nn.TransformerEncoderLayer(chanS1, chanS1 // 2, 16),
+                nn.Flatten(1, -1),
             ),
-            PermuteModule((0, 2, 3, 1)),
-            nn.Flatten(1, 2),  # keep depth unflattened
-            AddPositionalEmbedding((16, 16), 64, None),
-            nn.TransformerEncoderLayer(64, 8, 16),
-            nn.TransformerEncoderLayer(64, 8, 16),
-            nn.TransformerEncoderLayer(64, 8, 16),
-            nn.TransformerEncoderLayer(64, 8, 16),
-            nn.Flatten(1, -1),
-            nn.Linear(64 * 16**2, 4096),
+        )
+        self.scale2 = nntracker_pi.CertainScale(
+            zoom=nn.Sequential(
+                # 32
+                inception.even(chanS1, chanS2, bn=useBn, version=incver),
+                res_through(
+                    inception.even(chanS2, chanS2, bn=useBn, version=incver),
+                    inception.even(chanS2, chanS2, bn=useBn, version=incver),
+                ),
+                nn.MaxPool2d(2),
+                # 16
+            ),
+            proc=nn.Sequential(
+                res_through(
+                    inception.even(chanS2, chanS2, bn=useBn, version=incver),
+                    inception.even(chanS2, chanS2, bn=useBn, version=incver),
+                ),
+                PermuteModule((0, 2, 3, 1)),
+                nn.Flatten(1, 2),
+                AddPositionalEmbedding((sizeS2, sizeS2), chanS2, sizeS2),
+                nn.TransformerEncoderLayer(chanS2, chanS2 // 2, 16),
+                nn.TransformerEncoderLayer(chanS2, chanS2 // 2, 16),
+                nn.TransformerEncoderLayer(chanS2, chanS2 // 2, 16),
+                nn.TransformerEncoderLayer(chanS2, chanS2 // 2, 16),
+                nn.Flatten(1, -1),
+            ),
+        )
+        self.head = nn.Sequential(
+            nn.Linear(
+                chanS0 * sizeS0**2 + chanS1 * sizeS1**2 + chanS2 * sizeS2**2, 4096
+            ),
             nn.LeakyReLU(),
             nn.Dropout(),
-            nn.Linear(4096, 1000),
+            nn.Linear(4096, 512),
             nn.LeakyReLU(),
             nn.Dropout(),
-            nn.Linear(1000, 4),
+            nn.Linear(512, 4),
             nn.LeakyReLU(),
         )
 
     def forward(self, m):
+        # preproc
         m = TTF.resize(
             m,
             size=nntracker_pi.resize_size,
             interpolation=nntracker_pi.interpolation,
             antialias=nntracker_pi.antialias,
         )
-        out = self.mod(m)
+        s0=self.scale0.zoom(m)
+        s1=self.scale1.zoom(s0)
+        s2=self.scale2.zoom(s1)
+        s0=self.scale0.proc(s0)
+        s1=self.scale1.proc(s1)
+        s2=self.scale2.proc(s2)
+        out = torch.concat([s0, s1, s2], dim=1)
+        out = self.head(out)
         return out
 
 
