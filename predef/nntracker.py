@@ -114,21 +114,24 @@ class nntracker_pi(torch.nn.Module):
         useBn = True
         incver = "v3"
         chanS0 = 8
-        sizeS0 = 64
-        chanS1 = 16
-        sizeS1 = 32
-        chanS2 = 32
-        sizeS2 = 16
+        sizeS0 = 32
+        chanS1 = 32
+        sizeS1 = 16
+        chanS2 = 128
+        sizeS2 = 8
+        dimPerHead = 4
         self.scale0 = nntracker_pi.CertainScale(
             zoom=nn.Sequential(
-                # 128
                 inception.even(3, chanS0, bn=useBn, version=incver),
                 res_through(
                     inception.even(chanS0, chanS0, bn=useBn, version=incver),
+                ),
+                # 128
+                nn.MaxPool2d(4),
+                # 32
+                res_through(
                     inception.even(chanS0, chanS0, bn=useBn, version=incver),
                 ),
-                nn.MaxPool2d(2),
-                # 64
             ),
             proc=nn.Sequential(
                 res_through(
@@ -138,23 +141,25 @@ class nntracker_pi(torch.nn.Module):
                 PermuteModule((0, 2, 3, 1)),
                 nn.Flatten(1, 2),  # keep depth unflattened
                 AddPositionalEmbedding((sizeS0, sizeS0), chanS0, sizeS0),
-                nn.TransformerEncoderLayer(chanS0, chanS0 // 2, 16),
-                nn.TransformerEncoderLayer(chanS0, chanS0 // 2, 16),
-                nn.TransformerEncoderLayer(chanS0, chanS0 // 2, 16),
-                nn.TransformerEncoderLayer(chanS0, chanS0 // 2, 16),
+                nn.TransformerEncoderLayer(chanS0, chanS0 // dimPerHead, 16),
+                nn.TransformerEncoderLayer(chanS0, chanS0 // dimPerHead, 16),
+                nn.TransformerEncoderLayer(chanS0, chanS0 // dimPerHead, 16),
+                nn.TransformerEncoderLayer(chanS0, chanS0 // dimPerHead, 16),
                 nn.Flatten(1, -1),
             ),
         )
         self.scale1 = nntracker_pi.CertainScale(
             zoom=nn.Sequential(
-                # 64
                 inception.even(chanS0, chanS1, bn=useBn, version=incver),
                 res_through(
                     inception.even(chanS1, chanS1, bn=useBn, version=incver),
+                ),
+                # 32
+                nn.MaxPool2d(2),
+                # 16
+                res_through(
                     inception.even(chanS1, chanS1, bn=useBn, version=incver),
                 ),
-                nn.MaxPool2d(2),
-                # 32
             ),
             proc=nn.Sequential(
                 res_through(
@@ -164,23 +169,25 @@ class nntracker_pi(torch.nn.Module):
                 PermuteModule((0, 2, 3, 1)),
                 nn.Flatten(1, 2),
                 AddPositionalEmbedding((sizeS1, sizeS1), chanS1, sizeS1),
-                nn.TransformerEncoderLayer(chanS1, chanS1 // 2, 16),
-                nn.TransformerEncoderLayer(chanS1, chanS1 // 2, 16),
-                nn.TransformerEncoderLayer(chanS1, chanS1 // 2, 16),
-                nn.TransformerEncoderLayer(chanS1, chanS1 // 2, 16),
+                nn.TransformerEncoderLayer(chanS1, chanS1 // dimPerHead, 16),
+                nn.TransformerEncoderLayer(chanS1, chanS1 // dimPerHead, 16),
+                nn.TransformerEncoderLayer(chanS1, chanS1 // dimPerHead, 16),
+                nn.TransformerEncoderLayer(chanS1, chanS1 // dimPerHead, 16),
                 nn.Flatten(1, -1),
             ),
         )
         self.scale2 = nntracker_pi.CertainScale(
             zoom=nn.Sequential(
-                # 32
                 inception.even(chanS1, chanS2, bn=useBn, version=incver),
                 res_through(
                     inception.even(chanS2, chanS2, bn=useBn, version=incver),
+                ),
+                # 16
+                nn.MaxPool2d(2),
+                res_through(
                     inception.even(chanS2, chanS2, bn=useBn, version=incver),
                 ),
-                nn.MaxPool2d(2),
-                # 16
+                # 8
             ),
             proc=nn.Sequential(
                 res_through(
@@ -190,10 +197,10 @@ class nntracker_pi(torch.nn.Module):
                 PermuteModule((0, 2, 3, 1)),
                 nn.Flatten(1, 2),
                 AddPositionalEmbedding((sizeS2, sizeS2), chanS2, sizeS2),
-                nn.TransformerEncoderLayer(chanS2, chanS2 // 2, 16),
-                nn.TransformerEncoderLayer(chanS2, chanS2 // 2, 16),
-                nn.TransformerEncoderLayer(chanS2, chanS2 // 2, 16),
-                nn.TransformerEncoderLayer(chanS2, chanS2 // 2, 16),
+                nn.TransformerEncoderLayer(chanS2, chanS2 // dimPerHead, 16),
+                nn.TransformerEncoderLayer(chanS2, chanS2 // dimPerHead, 16),
+                nn.TransformerEncoderLayer(chanS2, chanS2 // dimPerHead, 16),
+                nn.TransformerEncoderLayer(chanS2, chanS2 // dimPerHead, 16),
                 nn.Flatten(1, -1),
             ),
         )
