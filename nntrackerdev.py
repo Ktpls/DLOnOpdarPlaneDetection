@@ -96,8 +96,8 @@ print("load finished")
 # %%  dataloader
 # for easier modify batchsize without reloading all samples
 batch_size = 2
-train_dataloader = DataLoader(train_data, batch_size=batch_size)
-test_dataloader = DataLoader(test_data, batch_size=32)
+train_dataloader = DataLoader(train_data, batch_size=batch_size, num_workers=4)
+test_dataloader = DataLoader(test_data, batch_size=32, num_workers=4)
 
 
 # %% lossFunc

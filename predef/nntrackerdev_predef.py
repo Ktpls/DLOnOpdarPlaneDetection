@@ -73,21 +73,24 @@ def estimateWingSpan(m):
 
 def lbl2PlaneInfo(lbl: np.ndarray):
     h, w = lbl.shape
-    X = np.arange(w).reshape(1, 1, w)
-    Y = np.arange(h).reshape(1, h, 1)
-    lblsurface = lbl.sum(axis=(-1, -2), keepdims=True) + 1
-    meanX = (lbl * X).sum(axis=(-1, -2), keepdims=True) / lblsurface
-    meanY = (lbl * Y).sum(axis=(-1, -2), keepdims=True) / lblsurface
-    meanX = meanX[0, 0, 0] / w
-    meanY = meanY[0, 0, 0] / h
-    wingSpan = estimateWingSpan(lbl) / w
-    isObj = 1 if lbl.sum() > 10 else 0
-    return (
-        isObj,
-        meanX,
-        meanY,
-        wingSpan,
-    )
+    lblsurface = lbl.sum(axis=(-1, -2), keepdims=True)
+    if lblsurface > 10:
+        X = np.arange(w).reshape(1, 1, w)
+        Y = np.arange(h).reshape(1, h, 1)
+        meanX = (lbl * X).sum(axis=(-1, -2), keepdims=True) / lblsurface
+        meanY = (lbl * Y).sum(axis=(-1, -2), keepdims=True) / lblsurface
+
+        dist = np.sqrt((X - meanX) ** 2 + (Y - meanY) ** 2) * lbl
+
+        wingSpan = 2 * np.max(dist) / w
+        return (
+            1,
+            meanX[0, 0, 0] / w,
+            meanY[0, 0, 0] / h,
+            wingSpan,
+        )
+    else:
+        return (0, 0, 0, 0)
 
 
 def planeInfo2Lbl(tup, lblShape):
@@ -400,13 +403,25 @@ def AABBOf(lbl, noobjthresh=5):
     return XYXY2XYWH(x1, y1, x2, y2) + (1,)
 
 
+class MassivePicturePlot:
+    def __init__(self, plotShape, fig=None):
+        self.plotShape = plotShape
+        self.fig = fig if fig else plt.figure(figsize=(20, 20))
+        self.i = 1
+
+    def toNextPlot(self) -> plt.Axes:
+        if self.i > np.prod(self.plotShape):
+            raise IndexError("Too many pictures")
+        ax = self.fig.add_subplot(self.plotShape[0], self.plotShape[1], self.i)
+        self.i += 1
+        return ax
+
+
 def viewmodel(model, device, datasetusing):
     model.eval()
 
-    plotShape = [7, 4]
-    subplotShape = [1, 2]
-    samplenum = np.prod(plotShape)
-    npp = nestedPyPlot(plotShape, subplotShape, plt.figure(figsize=(20, 20)))
+    mpp = MassivePicturePlot([7, 8])
+    samplenum = np.prod([7, 4])
     imshowconfig = {"vmin": 0, "vmax": 1}
     totalinferencetime = 0
     infercount = 0
@@ -426,18 +441,19 @@ def viewmodel(model, device, datasetusing):
             pi = pi.numpy()
             src, lbl = [tensorimg2ndarray(d) for d in [src, lbl]]
 
-            # lblFromPi = planeInfo2Lbl(pi, stdShape)
+            lblFromPi = planeInfo2Lbl(pi, stdShape)
             lblhat = planeInfo2Lbl(pihat, stdShape)
-            npp.subplot(i, 0)
+            mpp.toNextPlot()
             plt.title(PI2Str(pi))
             plt.imshow(cv.cvtColor(src, cv.COLOR_BGR2RGB))
-            npp.subplot(i, 1)
+
+            mpp.toNextPlot()
             lblComparasion = (
                 np.array(
                     [
                         lbl,
-                        # lblFromPi,
-                        np.zeros_like(lbl),
+                        lblFromPi,
+                        # np.zeros_like(lbl),
                         lblhat,
                     ]
                 )
