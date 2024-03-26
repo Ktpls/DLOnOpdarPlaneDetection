@@ -10,14 +10,12 @@ if not os.path.exists(projPath):
 
 # %% basics
 
+from predef.nntracker import *
+
 RunOnWtUtilityEnviroment = True
 if RunOnWtUtilityEnviroment:
-    from predef.nntracker import *
-
     datasetroot = r"dataset/"
 else:
-    from predef.nntracker import *
-
     datasetroot = r"/kaggle/input/nntrackerle2renh"
 
 # %%  nn def
@@ -91,17 +89,8 @@ test_data = labeldataset().init(
     None,
     stdShape,
     augSteps=[
-        # labeldataset.AugSteps.gausNoise,
+        labeldataset.AugSteps.gausNoise,
     ],
-)
-bad_data = labeldataset().init(
-    None,
-    None,
-    8192,
-    None,
-    None,
-    stdShape,
-    augSteps=[],
 )
 print("load finished")
 
@@ -198,7 +187,7 @@ if __name__ == "__main__":
 
 
 # %% view effect
-viewmodel(model, device, datasetusing=bad_data)
+viewmodel(model, device, datasetusing=test_data)
 
 
 # %%
