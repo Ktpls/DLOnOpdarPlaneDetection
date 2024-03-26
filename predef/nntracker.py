@@ -97,7 +97,7 @@ class PermuteModule(nn.Module):
         return torch.permute(x, self.dims)
 
 
-class nntracker_pi(torch.nn.Module):
+class nntracker_pi(ParameterRequiringGradModule):
     resize_size = 128
     interpolation = torchvision.transforms.InterpolationMode.BILINEAR
     antialias = True

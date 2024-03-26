@@ -270,7 +270,8 @@ def draw_random_line(image, n):
 
 
 def gaussianNoise(src):
-    noise = np.random.normal(0, 0.1, src.shape) * (src.max())
+    sig = np.random.uniform(EPS, 0.2)
+    noise = np.random.normal(0, sig, src.shape)
     src = np.clip(src + noise, 0, 1, dtype=np.float32)
     return src
 
