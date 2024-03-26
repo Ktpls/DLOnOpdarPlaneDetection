@@ -249,10 +249,13 @@ class nntracker_respi(ParameterRequiringGradModule):
             "layer3",
             "layer4",
         ),
+        loadPretrainedBackbone=True,
     ):
         super().__init__()
         weights = torchvision.models.ResNet18_Weights.DEFAULT
-        backbone = torchvision.models.resnet18(weights=weights)
+        backbone = torchvision.models.resnet18(
+            weights=weights if loadPretrainedBackbone else None
+        )
         backboneOutShape = 512
         for name, param in backbone.named_parameters():
             matched = False
