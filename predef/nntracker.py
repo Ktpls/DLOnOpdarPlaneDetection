@@ -100,8 +100,9 @@ class nntracker_pi(torch.nn.Module):
     interpolation = torchvision.transforms.InterpolationMode.BILINEAR
     antialias = True
 
-    class CertainScale:
+    class CertainScale(nn.Module):
         def __init__(self, zoom, proc) -> None:
+            super().__init__()
             self.zoom = zoom
             self.proc = proc
 
