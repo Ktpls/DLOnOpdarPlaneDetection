@@ -42,15 +42,7 @@ model = getmodel(
 # %% dataset
 
 
-@dataclasses.dataclass
-class NnTrackerDataset:
-    path: str
-    sel: str
-    datasettype: str
-
-
 print("loading dataset")
-datasetname = "largeEnoughToRecon"
 datasets = {
     "LE2REnh": NnTrackerDataset(r"LE2REnh/LE2REnh.zip", r"LE2REnh/all.xlsx", "zip"),
     "SmallAug": NnTrackerDataset(r"SmallAug/SmallAug.zip", r"SmallAug/all.xlsx", "zip"),
@@ -65,7 +57,7 @@ datasets = {
         "zip",
     ),
 }
-train_data = datasets[datasetname]
+train_data = datasets["largeEnoughToRecon"]
 train_data = labeldataset().init(
     os.path.join(datasetroot, train_data.path),
     os.path.join(datasetroot, train_data.sel),
