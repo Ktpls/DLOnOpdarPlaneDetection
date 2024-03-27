@@ -269,16 +269,24 @@ class nntracker_respi(ParameterRequiringGradModule):
         self.backbone = backbone
         self.backbonepreproc = weights.transforms()
 
+        insideDiscShape = backboneOutShape // 2
         self.mod = nn.Sequential(
+            nn.Linear(backboneOutShape, insideDiscShape),
+            nn.LeakyReLU(),
+            nn.Dropout(),
             res_through(
-                nn.Linear(backboneOutShape, backboneOutShape),
-                nn.LeakyReLU(),
-                nn.Dropout(),
-                nn.Linear(backboneOutShape, backboneOutShape),
-                nn.LeakyReLU(),
-                nn.Dropout(),
+                nn.Sequential(
+                    nn.Linear(insideDiscShape, insideDiscShape),
+                    nn.LeakyReLU(),
+                    nn.Dropout(),
+                ),
+                nn.Sequential(
+                    nn.Linear(insideDiscShape, insideDiscShape),
+                    nn.LeakyReLU(),
+                    nn.Dropout(),
+                ),
             ),
-            nn.Linear(backboneOutShape, 4),
+            nn.Linear(insideDiscShape, 4),
             nn.LeakyReLU(),
         )
 
