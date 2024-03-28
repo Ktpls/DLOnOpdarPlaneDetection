@@ -23,7 +23,7 @@ device = getDevice()
 modelpath = r"nntracker.pth"
 model = getmodel(
     # nntracker_pi(),
-    nntracker_resnextpi(
+    nntracker_respi(
         frozenLayers=(
             "conv1",
             "bn1",

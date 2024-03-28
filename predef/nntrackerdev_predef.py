@@ -207,10 +207,13 @@ def safeAffineAug(spl, lbl):
     wh = np.array([w, h])
     rounds = 0
     while True:
+        if rounds >= 20:
+            raise ValueError("too many regenerations!")
+        rounds += 1
         theta = np.random.uniform(-np.pi / 2, np.pi / 2)
         zoomrate = np.random.uniform(0.75, 1.25)
         ifflip = np.random.choice([1, -1], size=2, replace=True)
-        movvec = np.random.uniform(-0.5, 0.5, size=2) * [w, h]
+        movvec = np.random.uniform(-0.4, 0.4, size=2) * [w, h]
 
         trMat = (
             AffineMats.shift(*(0.5 * wh))
@@ -221,19 +224,13 @@ def safeAffineAug(spl, lbl):
             @ AffineMats.shift(*(-0.5 * wh))
         )[0:2, :]
 
-        spl1 = cv.warpAffine(
-            spl,
-            trMat,
-            wh,
-            borderMode=cv.BORDER_REPLICATE,
-        )
-
         lbl1 = cv.warpAffine(
             lbl,
             trMat,
             wh,
             borderMode=cv.BORDER_REPLICATE,
         )
+        lbl1 = np.where(lbl1 > 0.5, 1.0, 0.0).astype(np.float32)
 
         lblNonReplicated = cv.warpAffine(
             lbl,
@@ -242,23 +239,30 @@ def safeAffineAug(spl, lbl):
             borderMode=cv.BORDER_CONSTANT,
             borderValue=0,
         )
-        rounds += 1
-        if rounds >= 20:
-            raise ValueError("too many regenerations!")
+        lblNonReplicated = np.where(lblNonReplicated > 0.5, 1.0, 0.0).astype(np.float32)
 
+        # hope not interpolated too much
         if np.sum(np.abs(lblNonReplicated - lbl1)) / (np.sum(lbl1) + 1) >= 0.2:
             continue
 
-        lbl1 = np.where(lbl1 > 0.5, 1.0, 0.0).astype(np.float32)
         expectedSurface = lblSurface * zoomrate
         insightRate = np.sum(lbl1) / expectedSurface
         if insightRate >= 0.8:
-            return spl1, lbl1
+            # plane reserved nicely
+            pass
         elif insightRate <= 0.4:
             # consider as no plane
-            return spl1, np.zeros_like(lbl1)
+            lbl1 = np.zeros_like(lbl1)
         else:
             continue
+
+        spl1 = cv.warpAffine(
+            spl,
+            trMat,
+            wh,
+            borderMode=cv.BORDER_REPLICATE,
+        )
+        return spl1, lbl1
 
 
 def draw_random_line(image, n):
