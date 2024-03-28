@@ -224,23 +224,25 @@ def safeAffineAug(spl, lbl):
             @ AffineMats.shift(*(-0.5 * wh))
         )[0:2, :]
 
-        lbl1 = cv.warpAffine(
+        lblAffined = cv.warpAffine(
             lbl,
             trMat,
             wh,
             borderMode=cv.BORDER_REPLICATE,
         )
-        lbl1 = np.where(lbl1 > 0.5, 1.0, 0.0).astype(np.float32)
+        lblAffined = np.where(lblAffined > 0.5, 1.0, 0.0).astype(np.float32)
+        lbl1SurfAffined = np.sum(lblAffined)
 
         expectedSurface = lblSurface * zoomrate
-        insightRate = np.sum(lbl1) / expectedSurface
+        insightRate = lbl1SurfAffined / expectedSurface
         if insightRate >= 0.8:
             # plane reserved nicely
-            pass
+            lblResult = lblAffined
         elif insightRate <= 0.4:
             # consider as no plane
-            lbl1 = np.zeros_like(lbl1)
+            lblResult = np.zeros_like(lblAffined)
         else:
+            # not typical, not wanted
             continue
 
         lblNonReplicated = cv.warpAffine(
@@ -253,7 +255,7 @@ def safeAffineAug(spl, lbl):
         lblNonReplicated = np.where(lblNonReplicated > 0.5, 1.0, 0.0).astype(np.float32)
 
         # hope not interpolated too much
-        if np.sum(np.abs(lblNonReplicated - lbl1)) / (np.sum(lbl1) + 1) >= 0.2:
+        if np.sum(np.abs(lblNonReplicated - lblAffined)) / (lbl1SurfAffined + 1) >= 0.2:
             continue
 
         spl1 = cv.warpAffine(
@@ -262,7 +264,7 @@ def safeAffineAug(spl, lbl):
             wh,
             borderMode=cv.BORDER_REPLICATE,
         )
-        return spl1, lbl1
+        return spl1, lblResult
 
 
 def draw_random_line(image, n):
