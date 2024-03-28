@@ -23,7 +23,7 @@ device = getDevice()
 modelpath = r"nntracker.pth"
 model = getmodel(
     # nntracker_pi(),
-    nntracker_respi(
+    nntracker_resnextpi(
         frozenLayers=(
             "conv1",
             "bn1",
@@ -81,7 +81,8 @@ test_data = labeldataset().init(
     None,
     stdShape,
     augSteps=[
-        labeldataset.AugSteps.gausNoise,
+        labeldataset.AugSteps.affine,
+        # labeldataset.AugSteps.gausNoise,
     ],
 )
 print("load finished")
@@ -179,7 +180,7 @@ if __name__ == "__main__":
 
 
 # %% view effect
-viewmodel(model, device, datasetusing=test_data)
+viewmodel(model, device, test_data, calclose)
 
 
 # %%

@@ -2,8 +2,6 @@
 # basics
 from .nntrackerdev_predef import *
 
-# %%
-# nn def
 
 # %%
 # nn def
@@ -288,6 +286,76 @@ class nntracker_respi(ParameterRequiringGradModule):
 
     def forward(self, m):
         m = self.backbonepreproc(m)
+        m = self.backbone.conv1(m)
+        m = self.backbone.bn1(m)
+        m = self.backbone.relu(m)
+        m = self.backbone.maxpool(m)
+        m = self.backbone.layer1(m)
+        m = self.backbone.layer2(m)
+        m = self.backbone.layer3(m)
+        m = self.backbone.layer4(m)
+        m = self.backbone.avgpool(m)
+        m = torch.flatten(m, 1)
+        out = self.mod(m)
+        return out
+
+
+class nntracker_resnextpi(ParameterRequiringGradModule):
+    def __init__(
+        self,
+        frozenLayers=(
+            "conv1",
+            "bn1",
+            "relu",
+            "maxpool",
+            "layer1",
+            "layer2",
+            "layer3",
+            "layer4",
+        ),
+        loadPretrainedBackbone=True,
+    ):
+        super().__init__()
+        weights = torchvision.models.ResNeXt50_32X4D_Weights.DEFAULT
+        backbone = torchvision.models.resnext50_32x4d(
+            weights=weights if loadPretrainedBackbone else None
+        )
+        backboneOutShape = 2048
+        for name, param in backbone.named_parameters():
+            matched = False
+            for fl in frozenLayers:
+                if name.startswith(fl):
+                    param.requires_grad = False
+                    matched = True
+                    break
+            if not matched:
+                param.requires_grad = True
+        self.backbone = backbone
+        self.backbonepreproc = weights.transforms()
+        discInternalShape = 512
+        self.mod = nn.Sequential(
+            nn.Linear(backboneOutShape, discInternalShape),
+            nn.LeakyReLU(),
+            nn.Dropout(),
+            res_through(
+                nn.Sequential(
+                    nn.Linear(discInternalShape, discInternalShape),
+                    nn.LeakyReLU(),
+                    nn.Dropout(),
+                ),
+                nn.Sequential(
+                    nn.Linear(discInternalShape, discInternalShape),
+                    nn.LeakyReLU(),
+                    nn.Dropout(),
+                ),
+            ),
+            nn.Linear(discInternalShape, 4),
+            nn.LeakyReLU(),
+        )
+
+    def forward(self, m):
+        m = self.backbonepreproc(m)
+
         m = self.backbone.conv1(m)
         m = self.backbone.bn1(m)
         m = self.backbone.relu(m)

@@ -434,7 +434,7 @@ def PI2Str(pi):
     return ",".join([f"{i:.2f}" for i in pi])
 
 
-def viewmodel(model, device, datasetusing):
+def viewmodel(model, device, datasetusing, calcloss):
     model.eval()
 
     mpp = MassivePicturePlot([7, 8])
@@ -442,12 +442,14 @@ def viewmodel(model, device, datasetusing):
     imshowconfig = {"vmin": 0, "vmax": 1}
     totalinferencetime = 0
     infercount = 0
+    totalLoss = 0
 
     with torch.no_grad():
         for i in range(samplenum):
             src, lbl, pi = datasetusing[0]
             tstart = time.perf_counter()
             pihat = model.forward(src.reshape((1,) + src.shape).to(device))
+            totalLoss += calcloss(pi.reshape((1,) + pi.shape).to(device), pihat).item()
             totalinferencetime += time.perf_counter() - tstart
             infercount += 1
             pihat = pihat[0].cpu().numpy()
@@ -476,6 +478,7 @@ def viewmodel(model, device, datasetusing):
             plt.title(PI2Str(pihat))
             plt.imshow(lblComparasion, label="lblComparasion", **imshowconfig)
     print(f"average inference time={totalinferencetime / samplenum}")
+    print(f"average loss={totalLoss / samplenum}")
 
 
 def findBads(model, calclose, device, datasetFrom, datasetTo, numDesired, thresh):
