@@ -158,25 +158,25 @@ def onoutput(batch, aveerr):
     # writer.add_scalar("aveerr", aveerr, batch)
 
 
-trainpipe.train(
-    train_dataloader,
-    torch.optim.AdamW(
-        model.parameters(),
-        lr=1e-4,
-        weight_decay=1e-2,
-    ),
-    trainmainprogress,
-    epochnum=10,
-    customSubOnOutput=onoutput,
-)
+# trainpipe.train(
+#     train_dataloader,
+#     torch.optim.AdamW(
+#         model.parameters(),
+#         lr=1e-4,
+#         weight_decay=1e-2,
+#     ),
+#     trainmainprogress,
+#     epochnum=10,
+#     customSubOnOutput=onoutput,
+# )
 
 
-# %% save
-savemodel(model, modelpath)
+# # %% save
+# savemodel(model, modelpath)
 
-# %%
-if __name__ == "__main__":
-    exit()
+# # %%
+# if __name__ == "__main__":
+#     exit()
 
 
 # %% view effect
