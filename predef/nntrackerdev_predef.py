@@ -232,6 +232,17 @@ def safeAffineAug(spl, lbl):
         )
         lbl1 = np.where(lbl1 > 0.5, 1.0, 0.0).astype(np.float32)
 
+        expectedSurface = lblSurface * zoomrate
+        insightRate = np.sum(lbl1) / expectedSurface
+        if insightRate >= 0.8:
+            # plane reserved nicely
+            pass
+        elif insightRate <= 0.4:
+            # consider as no plane
+            lbl1 = np.zeros_like(lbl1)
+        else:
+            continue
+
         lblNonReplicated = cv.warpAffine(
             lbl,
             trMat,
@@ -243,17 +254,6 @@ def safeAffineAug(spl, lbl):
 
         # hope not interpolated too much
         if np.sum(np.abs(lblNonReplicated - lbl1)) / (np.sum(lbl1) + 1) >= 0.2:
-            continue
-
-        expectedSurface = lblSurface * zoomrate
-        insightRate = np.sum(lbl1) / expectedSurface
-        if insightRate >= 0.8:
-            # plane reserved nicely
-            pass
-        elif insightRate <= 0.4:
-            # consider as no plane
-            lbl1 = np.zeros_like(lbl1)
-        else:
             continue
 
         spl1 = cv.warpAffine(
