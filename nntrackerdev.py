@@ -22,19 +22,16 @@ else:
 device = getDevice()
 modelpath = r"nntracker.pth"
 model = getmodel(
-    # nntracker_pi(), #3080934
-    nntracker_respi( #9434092
-        frozenLayers=(
-            "conv1",
-            "bn1",
-            "relu",
-            "maxpool",
-            "layer1",
-            "layer2",
-            "layer3",
-            # "layer4",
-        ),
-    ),
+    nntracker_pi(),  # 1114854
+    # nntracker_respi( #9434092
+    #     frozenLayers=(
+    #         "conv1",
+    #         "layer1",
+    #         "layer2",
+    #         "layer3",
+    #         # "layer4",
+    #     ),
+    # ),
     modelpath,
     device,
 )
@@ -89,7 +86,7 @@ print("load finished")
 
 # %%  dataloader
 # for easier modify batchsize without reloading all samples
-batch_size = 2
+batch_size = 1
 num_workers = 0
 train_dataloader = DataLoader(
     train_data, batch_size=batch_size, num_workers=num_workers
@@ -172,10 +169,6 @@ trainpipe.train(
 # %% save
 savemodel(model, modelpath)
 
-# %%
-if __name__ == "__main__":
-    exit()
-
 
 # %% view effect
 viewmodel(model, device, test_data, calclose)
@@ -183,11 +176,3 @@ viewmodel(model, device, test_data, calclose)
 
 # %%
 os.system("pause")
-
-
-# %%
-def rmModel():
-    os.remove(modelpath)
-
-
-rmModel()

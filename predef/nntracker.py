@@ -95,6 +95,18 @@ class PermuteModule(nn.Module):
         return torch.permute(x, self.dims)
 
 
+class GlobalAvePooling(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+
+    @staticmethod
+    def static_forward(x):
+        return torch.mean(x, dim=(2, 3))
+
+    def forward(self, x):
+        return GlobalAvePooling.static_forward(x)
+
+
 class nntracker_pi(ParameterRequiringGradModule):
     """
     got pic
@@ -123,15 +135,12 @@ class nntracker_pi(ParameterRequiringGradModule):
             inception.even, bn=nntracker_pi.useBn, version=nntracker_pi.incver
         )
 
-        chanS0 = 8
+        chanS0 = 16
         factorS0 = 4
-        sizeS0 = nntracker_pi.sizeInput // factorS0
-        chanS1 = 32
+        chanS1 = 64
         factorS1 = 2
-        sizeS1 = sizeS0 // factorS1
-        chanS2 = 128
+        chanS2 = 256
         factorS2 = 2
-        sizeS2 = sizeS1 // factorS2
         self.preproc = nn.Sequential(
             incept(3, chanS0),
             nn.MaxPool2d(factorS0),
@@ -142,15 +151,15 @@ class nntracker_pi(ParameterRequiringGradModule):
         self.s1tos2 = nn.Sequential(
             nn.MaxPool2d(factorS2),
         )
-        self.featExtS0 = nn.Sequential(
-            incept(chanS0, chanS0),
-            incept(chanS0, chanS0),
-        )
         self.s2tos1 = nn.Sequential(
             nn.UpsamplingNearest2d(scale_factor=factorS2),
         )
         self.s1tos0 = nn.Sequential(
             nn.UpsamplingNearest2d(scale_factor=factorS1),
+        )
+        self.featExtS0 = nn.Sequential(
+            incept(chanS0, chanS0),
+            incept(chanS0, chanS0),
         )
         self.featExtS1 = nn.Sequential(
             incept(chanS0, chanS1),
@@ -162,31 +171,25 @@ class nntracker_pi(ParameterRequiringGradModule):
             incept(chanS2, chanS2),
             incept(chanS2, chanS2),
         )
-        chanSummary = chanS2
-        self.scaleSummary = nn.Sequential(
-            inception.even(
-                chanS0 + chanS1 + chanS2,
-                chanSummary,
-                bn=nntracker_pi.useBn,
-                version=nntracker_pi.incver,
-            )
+        chanBroadcast = chanS0 + chanS1 + chanS2
+        self.broadcast = nn.Sequential(
+            incept(chanS0 + chanS1 + chanS2, chanBroadcast),
         )
-        # self.featExtS0Sum = nn.Sequential(
-        #     incept(chanSummary + chanS0, chanS0),
-        #     incept(chanS0, chanS0),
-        # )
-        # self.featExtS1Sum = nn.Sequential(
-        #     incept(chanSummary + chanS1, chanS1),
-        #     incept(chanS1, chanS1),
-        # )
-        # self.featExtS2Sum = nn.Sequential(
-        #     incept(chanSummary + chanS2, chanS2),
-        #     incept(chanS2, chanS2),
-        # )
+        self.featExtS0Br = nn.Sequential(
+            incept(chanBroadcast + chanS0, chanS0),
+            incept(chanS0, chanS0),
+        )
+        self.featExtS1Br = nn.Sequential(
+            incept(chanBroadcast + chanS1, chanS1),
+            incept(chanS1, chanS1),
+        )
+        self.featExtS2Br = nn.Sequential(
+            incept(chanBroadcast + chanS2, chanS2),
+            incept(chanS2, chanS2),
+        )
 
         self.head = nn.Sequential(
-            nn.Flatten(1, -1),
-            nn.Linear(chanSummary * sizeS2**2, 1024),
+            nn.Linear(chanBroadcast, 1024),
             nn.LeakyReLU(),
             nn.Dropout(),
             nn.Linear(1024, 512),
@@ -214,24 +217,31 @@ class nntracker_pi(ParameterRequiringGradModule):
         s0 = self.featExtS0(s0)
         s1 = self.featExtS1(s1)
         s2 = self.featExtS2(s2)
-        summary = self.scaleSummary(
+        # broadcast within scale
+        br = self.broadcast(
             concatChan(
-                self.s1tos2(self.s0tos1(s0)),
-                self.s1tos2(s1),
-                s2,
+                s0,
+                self.s1tos0(s1),
+                self.s1tos0(self.s2tos1(s2)),
             )
         )
-        # featExtSum
-        # summary_s0 = self.s1tos0(summary)
-        # s0 = self.featExtS0Sum(concatChan(summary_s0, s0))
-        # summary_s1 = summary
-        # s1 = self.featExtS1Sum(concatChan(summary_s1, s1))
-        # summary_s2 = self.s1tos2(summary_s1)
-        # s2 = self.featExtS2Sum(concatChan(summary_s2, s2))
-        # scaleAll = concatChan(
-        #     torch.flatten(s0, 1), torch.flatten(s1, 1), torch.flatten(s2, 1)
-        # )
-        out = self.head(summary)
+        # continue featExt
+        brS0 = br
+        s0 = self.featExtS0Br(concatChan(brS0, s0))
+        brS1 = self.s0tos1(br)
+        s1 = self.featExtS1Br(concatChan(brS1, s1))
+        brS2 = self.s1tos2(brS1)
+        s2 = self.featExtS2Br(concatChan(brS2, s2))
+        out = self.head(
+            torch.concat(
+                (
+                    GlobalAvePooling.static_forward(s0),
+                    GlobalAvePooling.static_forward(s1),
+                    GlobalAvePooling.static_forward(s2),
+                ),
+                dim=-1,
+            )
+        )
         return out
 
 
@@ -240,9 +250,6 @@ class nntracker_respi(ParameterRequiringGradModule):
         self,
         frozenLayers=(
             "conv1",
-            "bn1",
-            "relu",
-            "maxpool",
             "layer1",
             "layer2",
             "layer3",
