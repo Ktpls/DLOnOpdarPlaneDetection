@@ -213,7 +213,7 @@ def safeAffineAug(spl, lbl):
         theta = np.random.uniform(-np.pi / 2, np.pi / 2)
         zoomrate = np.random.uniform(0.75, 1.25)
         ifflip = np.random.choice([1, -1], size=2, replace=True)
-        movvec = np.random.uniform(-0.4, 0.4, size=2) * [w, h]
+        movvec = np.random.uniform(-0.4, 0.4, size=2) * wh
 
         trMat = (
             AffineMats.shift(*(0.5 * wh))
@@ -231,10 +231,10 @@ def safeAffineAug(spl, lbl):
             borderMode=cv.BORDER_REPLICATE,
         )
         lblAffined = np.where(lblAffined > 0.5, 1.0, 0.0).astype(np.float32)
-        lbl1SurfAffined = np.sum(lblAffined)
+        SurfLbl1Affined = np.sum(lblAffined)
 
         expectedSurface = lblSurface * zoomrate
-        insightRate = lbl1SurfAffined / expectedSurface
+        insightRate = SurfLbl1Affined / expectedSurface
         if insightRate >= 0.8:
             # plane reserved nicely
             lblResult = lblAffined
@@ -255,7 +255,7 @@ def safeAffineAug(spl, lbl):
         lblNonReplicated = np.where(lblNonReplicated > 0.5, 1.0, 0.0).astype(np.float32)
 
         # hope not interpolated too much
-        if np.sum(np.abs(lblNonReplicated - lblAffined)) / (lbl1SurfAffined + 1) >= 0.2:
+        if np.sum(np.abs(lblNonReplicated - lblAffined)) / (SurfLbl1Affined + 1) >= 0.2:
             continue
 
         spl1 = cv.warpAffine(
@@ -440,9 +440,8 @@ def PI2Str(pi):
     return ",".join([f"{i:.2f}" for i in pi])
 
 
-def viewmodel(model, device, datasetusing, calcloss):
+def viewmodel(model: torch.nn.Module, device, datasetusing, calcloss):
     model.eval()
-
     mpp = MassivePicturePlot([7, 8])
     samplenum = np.prod([7, 4])
     imshowconfig = {"vmin": 0, "vmax": 1}
@@ -454,8 +453,8 @@ def viewmodel(model, device, datasetusing, calcloss):
         for i in range(samplenum):
             src, lbl, pi = datasetusing[0]
             tstart = time.perf_counter()
-            pihat = model.forward(src.reshape((1,) + src.shape).to(device))
-            totalLoss += calcloss(pi.reshape((1,) + pi.shape).to(device), pihat).item()
+            pihat = model.forward(src.unsqueeze(0).to(device))
+            totalLoss += calcloss(pi.unsqueeze(0).to(device), pihat).item()
             totalinferencetime += time.perf_counter() - tstart
             infercount += 1
             pihat = pihat[0].cpu().numpy()

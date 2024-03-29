@@ -22,8 +22,8 @@ else:
 device = getDevice()
 modelpath = r"nntracker.pth"
 model = getmodel(
-    # nntracker_pi(),
-    nntracker_respi(
+    # nntracker_pi(), #3080934
+    nntracker_respi( #9434092
         frozenLayers=(
             "conv1",
             "bn1",
@@ -90,8 +90,11 @@ print("load finished")
 # %%  dataloader
 # for easier modify batchsize without reloading all samples
 batch_size = 2
-train_dataloader = DataLoader(train_data, batch_size=batch_size, num_workers=0)
-test_dataloader = DataLoader(test_data, batch_size=32, num_workers=0)
+num_workers = 0
+train_dataloader = DataLoader(
+    train_data, batch_size=batch_size, num_workers=num_workers
+)
+test_dataloader = DataLoader(test_data, batch_size=32, num_workers=num_workers)
 
 
 # %% lossFunc
@@ -132,11 +135,8 @@ def calclose(pi, pihat):
 def trainmainprogress(batch, datatuple):
     model.train()
     src, lbl, pi = datatuple
-    src = src.to(device)
-    lbl = lbl.to(device)
-    pi = pi.to(device)
-    pihat = model.forward(src)
-    loss = calclose(pi, pihat)
+    pihat = model.forward(src.to(device))
+    loss = calclose(pi.to(device), pihat)
     return loss
 
 
@@ -147,36 +147,34 @@ def onoutput(batch, aveerr):
         lossTotal = 0
         numTotal = 0
         for src, lbl, pi in test_dataloader:
-            src = src.to(device)
-            lbl = lbl.to(device)
-            pi = pi.to(device)
-            pihat = model.forward(src)
-            lossTotal += calclose(pi, pihat).item()
+            pihat = model.forward(src.to(device))
+            lossTotal += calclose(pi.to(device), pihat).item()
             numTotal += batchsizeof(src)
             break
     print(f"testaveerr: {lossTotal/numTotal}")
     # writer.add_scalar("aveerr", aveerr, batch)
 
 
-# trainpipe.train(
-#     train_dataloader,
-#     torch.optim.AdamW(
-#         model.parameters(),
-#         lr=1e-4,
-#         weight_decay=1e-2,
-#     ),
-#     trainmainprogress,
-#     epochnum=10,
-#     customSubOnOutput=onoutput,
-# )
+trainpipe.train(
+    train_dataloader,
+    torch.optim.AdamW(
+        model.parameters(),
+        lr=1e-4,
+        weight_decay=1e-2,
+    ),
+    trainmainprogress,
+    epochnum=10,
+    outputperbatchnum=1000,
+    customSubOnOutput=onoutput,
+)
 
 
-# # %% save
-# savemodel(model, modelpath)
+# %% save
+savemodel(model, modelpath)
 
-# # %%
-# if __name__ == "__main__":
-#     exit()
+# %%
+if __name__ == "__main__":
+    exit()
 
 
 # %% view effect

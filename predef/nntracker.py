@@ -96,119 +96,100 @@ class PermuteModule(nn.Module):
 
 
 class nntracker_pi(ParameterRequiringGradModule):
-    resize_size = 128
-    interpolation = torchvision.transforms.InterpolationMode.BILINEAR
-    antialias = True
+    """
+    got pic
+    preproc
+    scale0
+    |---zoom to scale1
+    |   |---zoom to scale2
+    |   |   |
+    #---#---to scale0
+    |
+    #summary
+    |---zoom to scale1
+    |   |---zoom to scale2
+    |   |   |
+    """
 
-    class CertainScale(nn.Module):
-        def __init__(self, zoom, proc) -> None:
-            super().__init__()
-            self.zoom = zoom
-            self.proc = proc
+    sizeInput = 128
+    interpolation = torchvision.transforms.InterpolationMode.BILINEAR
+    antialias = False
+    useBn = False
+    incver = "v2"
 
     def __init__(self):
         super().__init__()
+        incept = functools.partial(
+            inception.even, bn=nntracker_pi.useBn, version=nntracker_pi.incver
+        )
 
-        useBn = True
-        incver = "v3"
         chanS0 = 8
-        sizeS0 = 32
+        factorS0 = 4
+        sizeS0 = nntracker_pi.sizeInput // factorS0
         chanS1 = 32
-        sizeS1 = 16
+        factorS1 = 2
+        sizeS1 = sizeS0 // factorS1
         chanS2 = 128
-        sizeS2 = 8
-        dimPerHead = 4
-        self.scale0 = nntracker_pi.CertainScale(
-            zoom=nn.Sequential(
-                inception.even(3, chanS0, bn=useBn, version=incver),
-                res_through(
-                    inception.even(chanS0, chanS0, bn=useBn, version=incver),
-                ),
-                # 128
-                nn.MaxPool2d(4),
-                # 32
-                res_through(
-                    inception.even(chanS0, chanS0, bn=useBn, version=incver),
-                ),
-            ),
-            proc=nn.Sequential(
-                res_through(
-                    inception.even(chanS0, chanS0, bn=useBn, version=incver),
-                    inception.even(chanS0, chanS0, bn=useBn, version=incver),
-                ),
-                PermuteModule((0, 2, 3, 1)),
-                nn.Flatten(1, 2),  # keep depth unflattened
-                AddPositionalEmbedding((sizeS0, sizeS0), chanS0, sizeS0),
-                nn.TransformerEncoderLayer(chanS0, chanS0 // dimPerHead, 16),
-                nn.TransformerEncoderLayer(chanS0, chanS0 // dimPerHead, 16),
-                nn.TransformerEncoderLayer(chanS0, chanS0 // dimPerHead, 16),
-                nn.TransformerEncoderLayer(chanS0, chanS0 // dimPerHead, 16),
-                nn.Flatten(1, -1),
-            ),
+        factorS2 = 2
+        sizeS2 = sizeS1 // factorS2
+        self.preproc = nn.Sequential(
+            incept(3, chanS0),
+            nn.MaxPool2d(factorS0),
         )
-        self.scale1 = nntracker_pi.CertainScale(
-            zoom=nn.Sequential(
-                inception.even(chanS0, chanS1, bn=useBn, version=incver),
-                res_through(
-                    inception.even(chanS1, chanS1, bn=useBn, version=incver),
-                ),
-                # 32
-                nn.MaxPool2d(2),
-                # 16
-                res_through(
-                    inception.even(chanS1, chanS1, bn=useBn, version=incver),
-                ),
-            ),
-            proc=nn.Sequential(
-                res_through(
-                    inception.even(chanS1, chanS1, bn=useBn, version=incver),
-                    inception.even(chanS1, chanS1, bn=useBn, version=incver),
-                ),
-                PermuteModule((0, 2, 3, 1)),
-                nn.Flatten(1, 2),
-                AddPositionalEmbedding((sizeS1, sizeS1), chanS1, sizeS1),
-                nn.TransformerEncoderLayer(chanS1, chanS1 // dimPerHead, 16),
-                nn.TransformerEncoderLayer(chanS1, chanS1 // dimPerHead, 16),
-                nn.TransformerEncoderLayer(chanS1, chanS1 // dimPerHead, 16),
-                nn.TransformerEncoderLayer(chanS1, chanS1 // dimPerHead, 16),
-                nn.Flatten(1, -1),
-            ),
+        self.s0tos1 = nn.Sequential(
+            nn.MaxPool2d(factorS1),
         )
-        self.scale2 = nntracker_pi.CertainScale(
-            zoom=nn.Sequential(
-                inception.even(chanS1, chanS2, bn=useBn, version=incver),
-                res_through(
-                    inception.even(chanS2, chanS2, bn=useBn, version=incver),
-                ),
-                # 16
-                nn.MaxPool2d(2),
-                res_through(
-                    inception.even(chanS2, chanS2, bn=useBn, version=incver),
-                ),
-                # 8
-            ),
-            proc=nn.Sequential(
-                res_through(
-                    inception.even(chanS2, chanS2, bn=useBn, version=incver),
-                    inception.even(chanS2, chanS2, bn=useBn, version=incver),
-                ),
-                PermuteModule((0, 2, 3, 1)),
-                nn.Flatten(1, 2),
-                AddPositionalEmbedding((sizeS2, sizeS2), chanS2, sizeS2),
-                nn.TransformerEncoderLayer(chanS2, chanS2 // dimPerHead, 16),
-                nn.TransformerEncoderLayer(chanS2, chanS2 // dimPerHead, 16),
-                nn.TransformerEncoderLayer(chanS2, chanS2 // dimPerHead, 16),
-                nn.TransformerEncoderLayer(chanS2, chanS2 // dimPerHead, 16),
-                nn.Flatten(1, -1),
-            ),
+        self.s1tos2 = nn.Sequential(
+            nn.MaxPool2d(factorS2),
         )
+        self.featExtS0 = nn.Sequential(
+            incept(chanS0, chanS0),
+            incept(chanS0, chanS0),
+        )
+        self.s2tos1 = nn.Sequential(
+            nn.UpsamplingNearest2d(scale_factor=factorS2),
+        )
+        self.s1tos0 = nn.Sequential(
+            nn.UpsamplingNearest2d(scale_factor=factorS1),
+        )
+        self.featExtS1 = nn.Sequential(
+            incept(chanS0, chanS1),
+            incept(chanS1, chanS1),
+            incept(chanS1, chanS1),
+        )
+        self.featExtS2 = nn.Sequential(
+            incept(chanS0, chanS2),
+            incept(chanS2, chanS2),
+            incept(chanS2, chanS2),
+        )
+        chanSummary = chanS2
+        self.scaleSummary = nn.Sequential(
+            inception.even(
+                chanS0 + chanS1 + chanS2,
+                chanSummary,
+                bn=nntracker_pi.useBn,
+                version=nntracker_pi.incver,
+            )
+        )
+        # self.featExtS0Sum = nn.Sequential(
+        #     incept(chanSummary + chanS0, chanS0),
+        #     incept(chanS0, chanS0),
+        # )
+        # self.featExtS1Sum = nn.Sequential(
+        #     incept(chanSummary + chanS1, chanS1),
+        #     incept(chanS1, chanS1),
+        # )
+        # self.featExtS2Sum = nn.Sequential(
+        #     incept(chanSummary + chanS2, chanS2),
+        #     incept(chanS2, chanS2),
+        # )
+
         self.head = nn.Sequential(
-            nn.Linear(
-                chanS0 * sizeS0**2 + chanS1 * sizeS1**2 + chanS2 * sizeS2**2, 4096
-            ),
+            nn.Flatten(1, -1),
+            nn.Linear(chanSummary * sizeS2**2, 1024),
             nn.LeakyReLU(),
             nn.Dropout(),
-            nn.Linear(4096, 512),
+            nn.Linear(1024, 512),
             nn.LeakyReLU(),
             nn.Dropout(),
             nn.Linear(512, 4),
@@ -216,21 +197,41 @@ class nntracker_pi(ParameterRequiringGradModule):
         )
 
     def forward(self, m):
+        def concatChan(*l):
+            return torch.concat(l, dim=1)
+
         # preproc
         m = TTF.resize(
             m,
-            size=nntracker_pi.resize_size,
+            size=nntracker_pi.sizeInput,
             interpolation=nntracker_pi.interpolation,
             antialias=nntracker_pi.antialias,
         )
-        s0 = self.scale0.zoom(m)
-        s1 = self.scale1.zoom(s0)
-        s2 = self.scale2.zoom(s1)
-        s0 = self.scale0.proc(s0)
-        s1 = self.scale1.proc(s1)
-        s2 = self.scale2.proc(s2)
-        out = torch.concat([s0, s1, s2], dim=1)
-        out = self.head(out)
+        s0 = self.preproc(m)
+        s1 = self.s0tos1(s0)
+        s2 = self.s1tos2(s1)
+        # featExt
+        s0 = self.featExtS0(s0)
+        s1 = self.featExtS1(s1)
+        s2 = self.featExtS2(s2)
+        summary = self.scaleSummary(
+            concatChan(
+                self.s1tos2(self.s0tos1(s0)),
+                self.s1tos2(s1),
+                s2,
+            )
+        )
+        # featExtSum
+        # summary_s0 = self.s1tos0(summary)
+        # s0 = self.featExtS0Sum(concatChan(summary_s0, s0))
+        # summary_s1 = summary
+        # s1 = self.featExtS1Sum(concatChan(summary_s1, s1))
+        # summary_s2 = self.s1tos2(summary_s1)
+        # s2 = self.featExtS2Sum(concatChan(summary_s2, s2))
+        # scaleAll = concatChan(
+        #     torch.flatten(s0, 1), torch.flatten(s1, 1), torch.flatten(s2, 1)
+        # )
+        out = self.head(summary)
         return out
 
 
@@ -250,8 +251,8 @@ class nntracker_respi(ParameterRequiringGradModule):
         loadPretrainedBackbone=True,
     ):
         super().__init__()
-        weights = torchvision.models.ResNet34_Weights.DEFAULT
-        backbone = torchvision.models.resnet34(
+        weights = torchvision.models.ResNet18_Weights.DEFAULT
+        backbone = torchvision.models.resnet18(
             weights=weights if loadPretrainedBackbone else None
         )
         backboneOutShape = 512
@@ -300,9 +301,12 @@ class nntracker_respi(ParameterRequiringGradModule):
         return out
 
 
-def getmodel(model0, modelpath, device):
+def getmodel(model0: torch.nn.Module, modelpath, device):
     model = setModule(model0, path=modelpath, device=device)
-    print(model)
+    print(
+        f"#param={np.sum([p.numel() for n, p in model.named_parameters() if p.requires_grad])}"
+    )
+    # print(model)
     return model
 
 

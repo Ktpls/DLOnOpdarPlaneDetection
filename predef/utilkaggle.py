@@ -174,7 +174,7 @@ class nestedPyPlot:
         return ax
 
 
-def setModule(model, path=None, device=None):
+def setModule(model: torch.nn.Module, path=None, device=None):
     import os
 
     if device is None:
@@ -574,3 +574,9 @@ class Stream:
 
     def collect(self, collector: "Stream.Collector"):
         return collector.do(self)
+
+
+def ModuleArgDistribution(mod: torch.nn.Module):
+    return "\n".join(
+        [f"{k}: {v.numel()}" for k, v in mod.named_parameters() if v.requires_grad]
+    )
