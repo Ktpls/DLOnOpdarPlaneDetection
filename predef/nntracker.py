@@ -158,34 +158,53 @@ class nntracker_pi(ParameterRequiringGradModule):
             nn.UpsamplingNearest2d(scale_factor=factorS1),
         )
         self.featExtS0 = nn.Sequential(
-            incept(chanS0, chanS0),
-            incept(chanS0, chanS0),
+            res_through(
+                incept(chanS0, chanS0),
+                incept(chanS0, chanS0),
+            )
         )
         self.featExtS1 = nn.Sequential(
             incept(chanS0, chanS1),
-            incept(chanS1, chanS1),
-            incept(chanS1, chanS1),
+            res_through(
+                incept(chanS1, chanS1),
+                incept(chanS1, chanS1),
+            ),
         )
         self.featExtS2 = nn.Sequential(
             incept(chanS0, chanS2),
-            incept(chanS2, chanS2),
-            incept(chanS2, chanS2),
+            res_through(
+                incept(chanS2, chanS2),
+                incept(chanS2, chanS2),
+            ),
         )
         chanBroadcast = chanS0 + chanS1 + chanS2
         self.broadcast = nn.Sequential(
             incept(chanS0 + chanS1 + chanS2, chanBroadcast),
+            res_through(
+                incept(chanBroadcast, chanBroadcast),
+                incept(chanBroadcast, chanBroadcast),
+            ),
         )
         self.featExtS0Br = nn.Sequential(
             incept(chanBroadcast + chanS0, chanS0),
-            incept(chanS0, chanS0),
+            res_through(
+                incept(chanS0, chanS0),
+                incept(chanS0, chanS0),
+            ),
         )
         self.featExtS1Br = nn.Sequential(
             incept(chanBroadcast + chanS1, chanS1),
-            incept(chanS1, chanS1),
+            res_through(
+                incept(chanS1, chanS1),
+                incept(chanS1, chanS1),
+            ),
         )
         self.featExtS2Br = nn.Sequential(
             incept(chanBroadcast + chanS2, chanS2),
-            incept(chanS2, chanS2),
+            res_through(
+                incept(chanS2, chanS2),
+                incept(chanS2, chanS2),
+            ),
         )
 
         self.head = nn.Sequential(

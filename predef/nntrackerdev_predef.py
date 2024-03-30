@@ -234,7 +234,7 @@ def safeAffineAug(spl, lbl):
         SurfLbl1Affined = np.sum(lblAffined)
 
         expectedSurface = lblSurface * zoomrate
-        insightRate = SurfLbl1Affined / expectedSurface
+        insightRate = SurfLbl1Affined / (expectedSurface + EPS)
         if insightRate >= 0.8:
             # plane reserved nicely
             lblResult = lblAffined
