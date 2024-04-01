@@ -107,6 +107,15 @@ class GlobalAvePooling(nn.Module):
         return GlobalAvePooling.static_forward(x)
 
 
+class ConvNext(nn.Module):
+    def __init__(self, infeat, outfeat, ks=3):
+        super().__init__()
+        self.conv = nn.Conv2d(infeat, outfeat, ks, padding="same")
+
+    def forward(self, x):
+        return self.conv(x)
+
+
 class nntracker_pi(ParameterRequiringGradModule):
     """
     got pic
@@ -126,23 +135,40 @@ class nntracker_pi(ParameterRequiringGradModule):
     sizeInput = 128
     interpolation = torchvision.transforms.InterpolationMode.BILINEAR
     antialias = False
-    useBn = False
+    useBn = True
     incver = "v2"
 
     def __init__(self):
         super().__init__()
-        incept = functools.partial(
-            inception.even, bn=nntracker_pi.useBn, version=nntracker_pi.incver
+        vp_incept = lambda infeat, outfeat: (
+            inception.even(
+                infeat=infeat,
+                outfeat=outfeat,
+                bn=nntracker_pi.useBn,
+                version=nntracker_pi.incver,
+            )
         )
+        vp_conv = lambda infeat, outfeat: (
+            (
+                nn.Sequential(
+                    nn.Conv2d(infeat, outfeat, 3, padding="same"),
+                    nn.BatchNorm2d(outfeat),
+                )
+            )
+            if nntracker_pi.useBn
+            else nn.Conv2d(infeat, outfeat, 3, padding="same")
+        )
+        vp_next = lambda infeat, outfeat: ()
+        visionProcessor = vp_conv
 
         chanS0 = 16
         factorS0 = 4
-        chanS1 = 64
+        chanS1 = 32
         factorS1 = 2
-        chanS2 = 256
+        chanS2 = 64
         factorS2 = 2
         self.preproc = nn.Sequential(
-            incept(3, chanS0),
+            visionProcessor(3, chanS0),
             nn.MaxPool2d(factorS0),
         )
         self.s0tos1 = nn.Sequential(
@@ -157,64 +183,69 @@ class nntracker_pi(ParameterRequiringGradModule):
         self.s1tos0 = nn.Sequential(
             nn.UpsamplingNearest2d(scale_factor=factorS1),
         )
-        self.featExtS0 = nn.Sequential(
-            res_through(
-                incept(chanS0, chanS0),
-                incept(chanS0, chanS0),
-            )
+        self.featExtS0 = OneShotAggregationResThrough(
+            visionProcessor(chanS0, chanS0),
+            visionProcessor(chanS0, chanS0),
+            chanTotal=3 * chanS0,
+            chanDest=chanS0,
         )
-        self.featExtS1 = nn.Sequential(
-            incept(chanS0, chanS1),
-            res_through(
-                incept(chanS1, chanS1),
-                incept(chanS1, chanS1),
-            ),
+        self.featExtS1 = OneShotAggregationResThrough(
+            visionProcessor(chanS0, chanS1),
+            visionProcessor(chanS1, chanS1),
+            visionProcessor(chanS1, chanS1),
+            chanTotal=chanS0 + 3 * chanS1,
+            chanDest=chanS1,
         )
-        self.featExtS2 = nn.Sequential(
-            incept(chanS0, chanS2),
-            res_through(
-                incept(chanS2, chanS2),
-                incept(chanS2, chanS2),
-            ),
+
+        self.featExtS2 = OneShotAggregationResThrough(
+            visionProcessor(chanS0, chanS2),
+            visionProcessor(chanS2, chanS2),
+            visionProcessor(chanS2, chanS2),
+            chanTotal=chanS0 + 3 * chanS2,
+            chanDest=chanS2,
         )
+
         chanBroadcast = chanS0 + chanS1 + chanS2
-        self.broadcast = nn.Sequential(
-            incept(chanS0 + chanS1 + chanS2, chanBroadcast),
-            res_through(
-                incept(chanBroadcast, chanBroadcast),
-                incept(chanBroadcast, chanBroadcast),
-            ),
+        self.broadcast = OneShotAggregationResThrough(
+            visionProcessor(chanS0 + chanS1 + chanS2, chanBroadcast),
+            visionProcessor(chanBroadcast, chanBroadcast),
+            visionProcessor(chanBroadcast, chanBroadcast),
+            chanTotal=(chanS0 + chanS1 + chanS2) + 3 * chanBroadcast,
+            chanDest=chanBroadcast,
         )
-        self.featExtS0Br = nn.Sequential(
-            incept(chanBroadcast + chanS0, chanS0),
-            res_through(
-                incept(chanS0, chanS0),
-                incept(chanS0, chanS0),
-            ),
+
+        self.featExtS0Br = OneShotAggregationResThrough(
+            visionProcessor(chanBroadcast + chanS0, chanS0),
+            visionProcessor(chanS0, chanS0),
+            visionProcessor(chanS0, chanS0),
+            chanTotal=chanBroadcast + chanS0 + 3 * chanS0,
+            chanDest=chanS0,
         )
-        self.featExtS1Br = nn.Sequential(
-            incept(chanBroadcast + chanS1, chanS1),
-            res_through(
-                incept(chanS1, chanS1),
-                incept(chanS1, chanS1),
-            ),
+
+        self.featExtS1Br = OneShotAggregationResThrough(
+            visionProcessor(chanBroadcast + chanS1, chanS1),
+            visionProcessor(chanS1, chanS1),
+            visionProcessor(chanS1, chanS1),
+            chanTotal=chanBroadcast + chanS1 + 3 * chanS1,
+            chanDest=chanS1,
         )
-        self.featExtS2Br = nn.Sequential(
-            incept(chanBroadcast + chanS2, chanS2),
-            res_through(
-                incept(chanS2, chanS2),
-                incept(chanS2, chanS2),
-            ),
+
+        self.featExtS2Br = OneShotAggregationResThrough(
+            visionProcessor(chanBroadcast + chanS2, chanS2),
+            visionProcessor(chanS2, chanS2),
+            visionProcessor(chanS2, chanS2),
+            chanTotal=chanBroadcast + chanS2 + 3 * chanS2,
+            chanDest=chanS2,
         )
 
         self.head = nn.Sequential(
-            nn.Linear(chanBroadcast, 1024),
+            nn.Linear(chanBroadcast, 256),
             nn.LeakyReLU(),
             nn.Dropout(),
-            nn.Linear(1024, 512),
+            nn.Linear(256, 256),
             nn.LeakyReLU(),
             nn.Dropout(),
-            nn.Linear(512, 4),
+            nn.Linear(256, 4),
             nn.LeakyReLU(),
         )
 

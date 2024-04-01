@@ -343,13 +343,10 @@ class inception(torch.nn.Module):
 
 
 class res_through(torch.nn.Module):
-    _modules = {}
 
     def __init__(self, *components, combiner=None) -> None:
         super().__init__()
-        self.components = components
-        for idx, module in enumerate(components):
-            self.add_module(str(idx), module)
+        self.seq = torch.nn.Sequential(*components)
         if combiner is None:
 
             def combiner_add(last, current):
@@ -360,9 +357,25 @@ class res_through(torch.nn.Module):
 
     def forward(self, m):
         o = m
-        for i, l in enumerate(self.components):
+        for i, l in enumerate(self.seq):
             ret = l(o)
             o = self.combiner(o, ret)
+        return o
+
+
+class OneShotAggregationResThrough(torch.nn.Module):
+    def __init__(self, *components, chanTotal, chanDest) -> None:
+        super().__init__()
+        self.seq = torch.nn.Sequential(*components)
+        self.combiner = torch.nn.Conv2d(chanTotal, chanDest, 1)
+
+    def forward(self, m):
+        o = [m]
+        t = m
+        for i, l in enumerate(self.seq):
+            t = l(t)
+            o.append(t)
+        o = self.combiner(torch.concat(o, dim=1))
         return o
 
 
