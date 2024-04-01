@@ -22,8 +22,8 @@ else:
 device = getDevice()
 modelpath = r"nntracker.pth"
 model = getmodel(
-    # nntracker_pi(),  # 908756
-    nntracker_respi(  # 9434092
+    # nntracker_pi(),
+    nntracker_respi(
         freeLayers=(
             # "features.15",
             "features.16",
