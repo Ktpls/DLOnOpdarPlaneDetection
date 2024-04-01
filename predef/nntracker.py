@@ -282,8 +282,8 @@ class nntracker_respi(ParameterRequiringGradModule):
             weights=weights if loadPretrainedBackbone else None
         )
         backboneOutShape = 512
-        self.setLayerFrozen(frozenLayers)
         self.backbone = backbone
+        self.setLayerFrozen(frozenLayers)
         self.backbonepreproc = weights.transforms()
 
         self.mod = nn.Sequential(
