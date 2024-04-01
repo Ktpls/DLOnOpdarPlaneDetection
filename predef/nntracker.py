@@ -298,10 +298,7 @@ class nntracker_pi(ParameterRequiringGradModule):
 class nntracker_respi(ParameterRequiringGradModule):
     def __init__(
         self,
-        freeLayers=(
-            "features.15",
-            "features.16",
-        ),
+        freeLayers=list(),
         loadPretrainedBackbone=True,
     ):
         super().__init__()
@@ -314,19 +311,25 @@ class nntracker_respi(ParameterRequiringGradModule):
         self.setBackboneFree(freeLayers)
         self.backbonepreproc = weights.transforms(antialias=True)
 
+        # self.mod = nn.Sequential(
+        #     nn.Sequential(
+        #         nn.Linear(backboneOutShape, 256),
+        #         nn.LeakyReLU(),
+        #         nn.Dropout(),
+        #     ),
+        #     nn.Sequential(
+        #         nn.Linear(256, 128),
+        #         nn.LeakyReLU(),
+        #         nn.Dropout(),
+        #     ),
+        #     nn.Linear(128, 4),
+        #     nn.LeakyReLU(),
+        # )
         self.mod = nn.Sequential(
-            nn.Sequential(
-                nn.Linear(backboneOutShape, 256),
-                nn.LeakyReLU(),
-                nn.Dropout(),
-            ),
-            nn.Sequential(
-                nn.Linear(256, 128),
-                nn.LeakyReLU(),
-                nn.Dropout(),
-            ),
-            nn.Linear(128, 4),
-            nn.LeakyReLU(),
+            nn.Linear(backboneOutShape, 1280),
+            nn.Hardswish(inplace=True),
+            nn.Dropout(0.5),
+            nn.Linear(1280, 4),
         )
 
     def setBackboneFree(self, freeLayers):

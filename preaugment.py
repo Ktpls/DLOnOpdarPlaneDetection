@@ -19,7 +19,7 @@ dataset = labeldataset().init(
 )
 
 destSampleNum = 8192
-dest = r"C:\file\code\DLOnOpdarPlaneDetection\dataset\LE2REnh"
+dest = r"dataset\LE2REnh"
 destSpl = os.path.join(dest, "spl")
 destLbl = os.path.join(dest, "lbl")
 names = list()

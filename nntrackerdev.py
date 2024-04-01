@@ -8,7 +8,8 @@ if not os.path.exists(projPath):
 !git pull
 """
 
-# %% basics
+# %%
+# basics
 
 from predef.nntracker import *
 
@@ -18,14 +19,15 @@ if RunOnWtUtilityEnviroment:
 else:
     datasetroot = r"/kaggle/input/nntrackerle2renh"
 
-# %%  nn def
+# %%
+# nn def
 device = getDevice()
 modelpath = r"nntracker.pth"
 model = getmodel(
     # nntracker_pi(),
     nntracker_respi(
         freeLayers=(
-            # "features.15",
+            "features.15",
             "features.16",
         ),
     ),
@@ -33,7 +35,8 @@ model = getmodel(
     device,
 )
 
-# %% dataset
+# %%
+# dataset
 
 
 print("loading dataset")
@@ -81,8 +84,8 @@ test_data = labeldataset().init(
 )
 print("load finished")
 
-# %%  dataloader
-# for easier modify batchsize without reloading all samples
+# %%
+# dataloader
 batch_size = 1
 num_workers = 0
 train_dataloader = DataLoader(
@@ -91,7 +94,8 @@ train_dataloader = DataLoader(
 test_dataloader = DataLoader(test_data, batch_size=32, num_workers=num_workers)
 
 
-# %% lossFunc
+# %%
+# lossFunc
 
 
 def calclose(pi, pihat):
@@ -123,7 +127,8 @@ def calclose(pi, pihat):
     return loss
 
 
-# %% train
+# %%
+# train
 
 
 def trainmainprogress(batch, datatuple):
@@ -163,11 +168,13 @@ trainpipe.train(
 )
 
 
-# %% save
+# %%
+# save
 savemodel(model, modelpath)
 
 
-# %% view effect
+# %%
+# view effect
 viewmodel(model, device, test_data, calclose)
 
 

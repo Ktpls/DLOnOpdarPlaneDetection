@@ -589,7 +589,6 @@ class Stream:
         return collector.do(self)
 
 
-def ModuleArgDistribution(mod: torch.nn.Module):
-    return "\n".join(
-        [f"{k}: {v.numel()}" for k, v in mod.named_parameters() if v.requires_grad]
-    )
+def ModuleArgDistribution(mod: torch.nn.Module, OnlyWithGrad: bool = True):
+    cond = (lambda v: v.requires_grad) if OnlyWithGrad else (lambda v: True)
+    return "\n".join([f"{k}: {v.numel()}" for k, v in mod.named_parameters() if cond(v)])
