@@ -282,15 +282,7 @@ class nntracker_respi(ParameterRequiringGradModule):
             weights=weights if loadPretrainedBackbone else None
         )
         backboneOutShape = 512
-        for name, param in backbone.named_parameters():
-            matched = False
-            for fl in frozenLayers:
-                if name.startswith(fl):
-                    param.requires_grad = False
-                    matched = True
-                    break
-            if not matched:
-                param.requires_grad = True
+        self.setLayerFrozen(frozenLayers)
         self.backbone = backbone
         self.backbonepreproc = weights.transforms()
 
@@ -310,6 +302,17 @@ class nntracker_respi(ParameterRequiringGradModule):
             nn.Linear(backboneOutShape, 4),
             nn.LeakyReLU(),
         )
+
+    def setLayerFrozen(self, frozenLayers):
+        for name, param in self.backbone.named_parameters():
+            matched = False
+            for fl in frozenLayers:
+                if name.startswith(fl):
+                    param.requires_grad = False
+                    matched = True
+                    break
+            if not matched:
+                param.requires_grad = True
 
     def forward(self, m):
         m = self.backbonepreproc(m)
