@@ -284,7 +284,7 @@ class nntracker_respi(ParameterRequiringGradModule):
         backboneOutShape = 512
         self.backbone = backbone
         self.setLayerFrozen(frozenLayers)
-        self.backbonepreproc = weights.transforms()
+        self.backbonepreproc = weights.transforms(antialias=True)
 
         self.mod = nn.Sequential(
             res_through(
