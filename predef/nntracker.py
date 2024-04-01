@@ -298,67 +298,50 @@ class nntracker_pi(ParameterRequiringGradModule):
 class nntracker_respi(ParameterRequiringGradModule):
     def __init__(
         self,
-        frozenLayers=(
-            "conv1",
-            "layer1",
-            "layer2",
-            "layer3",
-            "layer4",
+        freeLayers=(
+            "features.15",
+            "features.16",
         ),
         loadPretrainedBackbone=True,
     ):
         super().__init__()
-        weights = torchvision.models.ResNet18_Weights.DEFAULT
-        backbone = torchvision.models.resnet18(
+        weights = torchvision.models.MobileNet_V3_Large_Weights.DEFAULT
+        backbone = torchvision.models.mobilenet_v3_large(
             weights=weights if loadPretrainedBackbone else None
         )
-        backboneOutShape = 512
+        backboneOutShape = 960
         self.backbone = backbone
-        self.setLayerFrozen(frozenLayers)
+        self.setBackboneFree(freeLayers)
         self.backbonepreproc = weights.transforms(antialias=True)
 
         self.mod = nn.Sequential(
-            res_through(
-                nn.Sequential(
-                    nn.Linear(backboneOutShape, backboneOutShape),
-                    nn.LeakyReLU(),
-                    nn.Dropout(),
-                ),
-                nn.Sequential(
-                    nn.Linear(backboneOutShape, backboneOutShape),
-                    nn.LeakyReLU(),
-                    nn.Dropout(),
-                ),
+            nn.Sequential(
+                nn.Linear(backboneOutShape, 256),
+                nn.LeakyReLU(),
+                nn.Dropout(),
             ),
-            nn.Linear(backboneOutShape, 4),
+            nn.Sequential(
+                nn.Linear(256, 128),
+                nn.LeakyReLU(),
+                nn.Dropout(),
+            ),
+            nn.Linear(128, 4),
             nn.LeakyReLU(),
         )
 
-    def setLayerFrozen(self, frozenLayers):
+    def setBackboneFree(self, freeLayers):
         for name, param in self.backbone.named_parameters():
-            matched = False
-            for fl in frozenLayers:
-                if name.startswith(fl):
-                    param.requires_grad = False
-                    matched = True
-                    break
-            if not matched:
+            if any([name.startswith(fl) for fl in freeLayers]):
                 param.requires_grad = True
+            else:
+                param.requires_grad = False
 
-    def forward(self, m):
-        m = self.backbonepreproc(m)
-        m = self.backbone.conv1(m)
-        m = self.backbone.bn1(m)
-        m = self.backbone.relu(m)
-        m = self.backbone.maxpool(m)
-        m = self.backbone.layer1(m)
-        m = self.backbone.layer2(m)
-        m = self.backbone.layer3(m)
-        m = self.backbone.layer4(m)
-        m = self.backbone.avgpool(m)
-        m = torch.flatten(m, 1)
-        out = self.mod(m)
-        return out
+    def forward(self, x):
+        x = self.backbone.features(x)
+        x = self.backbone.avgpool(x)
+        x = torch.flatten(x, 1)
+        x = self.mod(x)
+        return x
 
 
 def getmodel(model0: torch.nn.Module, modelpath, device):
