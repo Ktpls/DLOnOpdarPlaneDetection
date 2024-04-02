@@ -300,6 +300,8 @@ class nntracker_respi(ParameterRequiringGradModule):
         self,
         freeLayers=list(),
         loadPretrainedBackbone=True,
+        last_channel=1280 // 2,
+        dropout=0.2,
     ):
         super().__init__()
         weights = torchvision.models.MobileNet_V3_Large_Weights.DEFAULT
@@ -325,11 +327,12 @@ class nntracker_respi(ParameterRequiringGradModule):
         #     nn.Linear(128, 4),
         #     nn.LeakyReLU(),
         # )
+
         self.mod = nn.Sequential(
-            nn.Linear(backboneOutShape, 1280),
+            nn.Linear(backboneOutShape, last_channel),
             nn.Hardswish(inplace=True),
-            nn.Dropout(0.5),
-            nn.Linear(1280, 4),
+            nn.Dropout(dropout),
+            nn.Linear(last_channel, 4),
         )
 
     def setBackboneFree(self, freeLayers):
