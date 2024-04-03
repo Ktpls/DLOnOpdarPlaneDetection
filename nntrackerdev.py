@@ -39,7 +39,7 @@ model = getmodel(
             # "features.9",
             # "features.10",
             # "features.11",
-            # "features.12",
+            "features.12",
             "features.13",
             "features.14",
             "features.15",
@@ -190,7 +190,7 @@ savemodel(model, modelpath)
 
 # %%
 # view effect
-viewmodel(model, device, test_data, calclose)
+viewmodel(model, device, train_data, calclose)
 
 
 # %%
