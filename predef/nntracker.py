@@ -169,28 +169,28 @@ class ELAN_H(nn.Module):
         self.outQuad = out_channels // 4
         self.wayComplex = nn.Sequential(
             nn.Sequential(
-                nn.Conv2d(in_channels, out_channels, 3, padding="same"),
-                nn.BatchNorm2d(out_channels),
+                nn.Conv2d(in_channels, self.outHalf, 3, padding="same"),
+                nn.BatchNorm2d(self.outHalf),
                 nn.Hardswish(),
             ),
             nn.Sequential(
-                nn.Conv2d(out_channels, out_channels, 3, padding="same"),
-                nn.BatchNorm2d(out_channels),
+                nn.Conv2d(self.outHalf, self.outQuad, 3, padding="same"),
+                nn.BatchNorm2d(self.outQuad),
                 nn.Hardswish(),
             ),
             nn.Sequential(
-                nn.Conv2d(out_channels, out_channels, 3, padding="same"),
-                nn.BatchNorm2d(out_channels),
+                nn.Conv2d(self.outQuad, self.outQuad, 3, padding="same"),
+                nn.BatchNorm2d(self.outQuad),
                 nn.Hardswish(),
             ),
             nn.Sequential(
-                nn.Conv2d(out_channels, out_channels, 3, padding="same"),
-                nn.BatchNorm2d(out_channels),
+                nn.Conv2d(self.outQuad, self.outQuad, 3, padding="same"),
+                nn.BatchNorm2d(self.outQuad),
                 nn.Hardswish(),
             ),
             nn.Sequential(
-                nn.Conv2d(out_channels, out_channels, 3, padding="same"),
-                nn.BatchNorm2d(out_channels),
+                nn.Conv2d(self.outQuad, self.outQuad, 3, padding="same"),
+                nn.BatchNorm2d(self.outQuad),
                 nn.Hardswish(),
             ),
         )
@@ -217,14 +217,12 @@ class ELAN_H(nn.Module):
         return self.combiner(
             torch.concat(
                 [
-                    o_simp[:, : self.outHalf],
-                    o_comp0[:, : self.outHalf],
-                    o_comp1[:, : self.outQuad],
-                    o_comp2[:, : self.outQuad],
-                    o_comp3[:, : self.outQuad],
-                    o_comp4[
-                        :, : self.outQuad
-                    ],  # is it correct? half of the output wont be used
+                    o_simp,
+                    o_comp0,
+                    o_comp1,
+                    o_comp2,
+                    o_comp3,
+                    o_comp4,
                 ],
                 dim=1,
             )
@@ -268,6 +266,15 @@ class MPn(nn.Module):
         return self.combiner(torch.concat([o_pool, o_conv], dim=1))
 
 
+class ParameterRequiringGradModule(torch.nn.Module):
+    def parameters(
+        self, recurse: bool = True
+    ) -> typing.Iterator[torch.nn.parameter.Parameter]:
+        return filter(
+            lambda x: x.requires_grad is not False, super().parameters(recurse)
+        )
+
+
 class FinalModule(nn.Module):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -280,7 +287,7 @@ class FinalModule(nn.Module):
         )
 
 
-class nntracker_respi(FinalModule):
+class nntracker_respi(ParameterRequiringGradModule):
     def __init__(
         self,
         freeLayers=list(),
