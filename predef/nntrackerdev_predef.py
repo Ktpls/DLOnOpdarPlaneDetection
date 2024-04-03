@@ -128,41 +128,70 @@ class NonAffineTorchAutoAugment(torchvision.transforms.AutoAugment):
     def _get_policies(
         self, policy: torchvision.transforms.autoaugment.AutoAugmentPolicy
     ):
+        # policies = [
+        #     [("AutoContrast", 0.5, None), ("Equalize", 0.9, None)],
+        #     [("AutoContrast", 0.8, None), ("Solarize", 0.2, 8)],
+        #     [("AutoContrast", 0.9, None), ("Solarize", 0.8, 3)],
+        #     [("Brightness", 0.1, 3), ("Color", 0.7, 0)],
+        #     [("Brightness", 0.9, 6), ("Color", 0.2, 8)],
+        #     [("Color", 0.4, 0), ("Equalize", 0.6, None)],
+        #     [("Color", 0.4, 3), ("Brightness", 0.6, 7)],
+        #     [("Color", 0.6, 4), ("Contrast", 1.0, 8)],
+        #     [("Color", 0.8, 8), ("Solarize", 0.8, 7)],
+        #     [("Color", 0.9, 9), ("Equalize", 0.6, None)],
+        #     [("Contrast", 0.6, 7), ("Sharpness", 0.6, 5)],
+        #     [("Equalize", 0.0, None), ("Equalize", 0.8, None)],
+        #     [("Equalize", 0.2, None), ("AutoContrast", 0.6, None)],
+        #     [("Equalize", 0.2, None), ("Equalize", 0.6, None)],
+        #     [("Equalize", 0.3, None), ("AutoContrast", 0.4, None)],
+        #     [("Equalize", 0.4, None), ("Solarize", 0.2, 4)],
+        #     [("Equalize", 0.6, None), ("Equalize", 0.5, None)],
+        #     [("Equalize", 0.6, None), ("Posterize", 0.4, 6)],
+        #     [("Equalize", 0.6, None), ("Solarize", 0.6, 6)],
+        #     [("Equalize", 0.8, None), ("Equalize", 0.6, None)],
+        #     [("Equalize", 0.8, None), ("Invert", 0.1, None)],
+        #     [("Invert", 0.1, None), ("Contrast", 0.2, 6)],
+        #     [("Invert", 0.6, None), ("Equalize", 1.0, None)],
+        #     [("Invert", 0.9, None), ("AutoContrast", 0.8, None)],
+        #     [("Invert", 0.9, None), ("Equalize", 0.6, None)],
+        #     [("Posterize", 0.6, 7), ("Posterize", 0.6, 6)],
+        #     [("Posterize", 0.8, 5), ("Equalize", 1.0, None)],
+        #     [("Sharpness", 0.3, 9), ("Brightness", 0.7, 6)],
+        #     [("Sharpness", 0.4, 7), ("Invert", 0.6, None)],
+        #     [("Sharpness", 0.8, 1), ("Sharpness", 0.9, 3)],
+        #     [("Solarize", 0.4, 5), ("AutoContrast", 0.9, None)],
+        #     [("Solarize", 0.5, 2), ("Invert", 0.0, None)],
+        #     [("Solarize", 0.6, 3), ("Equalize", 0.6, None)],
+        #     [("Solarize", 0.6, 5), ("AutoContrast", 0.6, None)],
+        # ]
+
+        # AutoAugmentPolicy.IMAGENET
         policies = [
-            [("AutoContrast", 0.5, None), ("Equalize", 0.9, None)],
-            [("AutoContrast", 0.8, None), ("Solarize", 0.2, 8)],
-            [("AutoContrast", 0.9, None), ("Solarize", 0.8, 3)],
-            [("Brightness", 0.1, 3), ("Color", 0.7, 0)],
-            [("Brightness", 0.9, 6), ("Color", 0.2, 8)],
-            [("Color", 0.4, 0), ("Equalize", 0.6, None)],
-            [("Color", 0.4, 3), ("Brightness", 0.6, 7)],
-            [("Color", 0.6, 4), ("Contrast", 1.0, 8)],
-            [("Color", 0.8, 8), ("Solarize", 0.8, 7)],
-            [("Color", 0.9, 9), ("Equalize", 0.6, None)],
-            [("Contrast", 0.6, 7), ("Sharpness", 0.6, 5)],
-            [("Equalize", 0.0, None), ("Equalize", 0.8, None)],
-            [("Equalize", 0.2, None), ("AutoContrast", 0.6, None)],
-            [("Equalize", 0.2, None), ("Equalize", 0.6, None)],
-            [("Equalize", 0.3, None), ("AutoContrast", 0.4, None)],
-            [("Equalize", 0.4, None), ("Solarize", 0.2, 4)],
-            [("Equalize", 0.6, None), ("Equalize", 0.5, None)],
-            [("Equalize", 0.6, None), ("Posterize", 0.4, 6)],
-            [("Equalize", 0.6, None), ("Solarize", 0.6, 6)],
-            [("Equalize", 0.8, None), ("Equalize", 0.6, None)],
-            [("Equalize", 0.8, None), ("Invert", 0.1, None)],
-            [("Invert", 0.1, None), ("Contrast", 0.2, 6)],
-            [("Invert", 0.6, None), ("Equalize", 1.0, None)],
-            [("Invert", 0.9, None), ("AutoContrast", 0.8, None)],
-            [("Invert", 0.9, None), ("Equalize", 0.6, None)],
-            [("Posterize", 0.6, 7), ("Posterize", 0.6, 6)],
-            [("Posterize", 0.8, 5), ("Equalize", 1.0, None)],
-            [("Sharpness", 0.3, 9), ("Brightness", 0.7, 6)],
-            [("Sharpness", 0.4, 7), ("Invert", 0.6, None)],
-            [("Sharpness", 0.8, 1), ("Sharpness", 0.9, 3)],
-            [("Solarize", 0.4, 5), ("AutoContrast", 0.9, None)],
-            [("Solarize", 0.5, 2), ("Invert", 0.0, None)],
-            [("Solarize", 0.6, 3), ("Equalize", 0.6, None)],
-            [("Solarize", 0.6, 5), ("AutoContrast", 0.6, None)],
+            (("Posterize", 0.4, 8), ("Rotate", 0.6, 9)),
+            (("Solarize", 0.6, 5), ("AutoContrast", 0.6, None)),
+            (("Equalize", 0.8, None), ("Equalize", 0.6, None)),
+            (("Posterize", 0.6, 7), ("Posterize", 0.6, 6)),
+            (("Equalize", 0.4, None), ("Solarize", 0.2, 4)),
+            (("Equalize", 0.4, None), ("Rotate", 0.8, 8)),
+            (("Solarize", 0.6, 3), ("Equalize", 0.6, None)),
+            (("Posterize", 0.8, 5), ("Equalize", 1.0, None)),
+            (("Rotate", 0.2, 3), ("Solarize", 0.6, 8)),
+            (("Equalize", 0.6, None), ("Posterize", 0.4, 6)),
+            (("Rotate", 0.8, 8), ("Color", 0.4, 0)),
+            (("Rotate", 0.4, 9), ("Equalize", 0.6, None)),
+            (("Equalize", 0.0, None), ("Equalize", 0.8, None)),
+            (("Invert", 0.6, None), ("Equalize", 1.0, None)),
+            (("Color", 0.6, 4), ("Contrast", 1.0, 8)),
+            (("Rotate", 0.8, 8), ("Color", 1.0, 2)),
+            (("Color", 0.8, 8), ("Solarize", 0.8, 7)),
+            (("Sharpness", 0.4, 7), ("Invert", 0.6, None)),
+            (("ShearX", 0.6, 5), ("Equalize", 1.0, None)),
+            (("Color", 0.4, 0), ("Equalize", 0.6, None)),
+            (("Equalize", 0.4, None), ("Solarize", 0.2, 4)),
+            (("Solarize", 0.6, 5), ("AutoContrast", 0.6, None)),
+            (("Invert", 0.6, None), ("Equalize", 1.0, None)),
+            (("Color", 0.6, 4), ("Contrast", 1.0, 8)),
+            (("Equalize", 0.8, None), ("Equalize", 0.6, None)),
         ]
         policies = [
             [
@@ -440,7 +469,7 @@ def PI2Str(pi):
     return ",".join([f"{i:.2f}" for i in pi])
 
 
-def viewmodel(model: torch.nn.Module, device, datasetusing, calcloss):
+def viewmodel(model: torch.nn.Module, device, datasetusing, calcloss, isWanted=None):
     model.eval()
     mpp = MassivePicturePlot([7, 8])
     samplenum = np.prod([7, 4])
@@ -448,14 +477,21 @@ def viewmodel(model: torch.nn.Module, device, datasetusing, calcloss):
     totalinferencetime = 0
     infercount = 0
     totalLoss = 0
+    isWanted = isWanted if isWanted else lambda x: True
 
     with torch.no_grad():
         for i in range(samplenum):
-            src, lbl, pi = datasetusing[0]
-            tstart = time.perf_counter()
-            pihat = model.forward(src.unsqueeze(0).to(device))
-            totalLoss += calcloss(pi.unsqueeze(0).to(device), pihat).item()
-            totalinferencetime += time.perf_counter() - tstart
+            while True:
+                src, lbl, pi = datasetusing[0]
+                tstart = time.perf_counter()
+                pihat = model.forward(src.unsqueeze(0).to(device))
+                tend = time.perf_counter()
+                loss = calcloss(pi.unsqueeze(0).to(device), pihat).item()
+                if isWanted(loss):
+                    break
+
+            totalLoss += loss
+            totalinferencetime += tend - tstart
             infercount += 1
             pihat = pihat[0].cpu().numpy()
 

@@ -300,7 +300,6 @@ class nntracker_respi(ParameterRequiringGradModule):
         self,
         freeLayers=list(),
         loadPretrainedBackbone=True,
-        last_channel=1280 // 2,
         dropout=0.2,
     ):
         super().__init__()
@@ -308,7 +307,6 @@ class nntracker_respi(ParameterRequiringGradModule):
         backbone = torchvision.models.mobilenet_v3_large(
             weights=weights if loadPretrainedBackbone else None
         )
-        backboneOutShape = 960
         self.backbone = backbone
         self.setBackboneFree(freeLayers)
         self.backbonepreproc = weights.transforms(antialias=True)
@@ -328,8 +326,32 @@ class nntracker_respi(ParameterRequiringGradModule):
         #     nn.LeakyReLU(),
         # )
 
-        self.mod = nn.Sequential(
-            nn.Linear(backboneOutShape, last_channel),
+        chanModBig = 224
+        self.modBig = nn.Sequential(
+            nn.Conv2d(112, chanModBig, 3, stride=2, padding=0),
+            nn.BatchNorm2d(chanModBig),
+            nn.Hardswish(),
+            OneShotAggregationResThrough(
+                nn.Sequential(
+                    nn.Conv2d(chanModBig, chanModBig, 3, stride=1, padding="same"),
+                    nn.BatchNorm2d(chanModBig),
+                    nn.Hardswish(),
+                ),
+                nn.Sequential(
+                    nn.Conv2d(chanModBig, chanModBig, 3, stride=1, padding="same"),
+                    nn.BatchNorm2d(chanModBig),
+                    nn.Hardswish(),
+                ),
+                chanTotal=chanModBig * 3,
+                chanDest=chanModBig,
+            ),
+        )
+
+        backboneOutShape = 960
+        last_channel = 1280 // 2
+
+        self.modFinal = nn.Sequential(
+            nn.Linear(backboneOutShape + chanModBig, last_channel),
             nn.Hardswish(inplace=True),
             nn.Dropout(dropout),
             nn.Linear(last_channel, 4),
@@ -343,10 +365,16 @@ class nntracker_respi(ParameterRequiringGradModule):
                 param.requires_grad = False
 
     def forward(self, x):
-        x = self.backbone.features(x)
+        for i, module in enumerate(self.backbone.features):
+            x = module(x)
+            if i == 12:
+                big = x
         x = self.backbone.avgpool(x)
+        big = self.modBig(big)
+        big = self.backbone.avgpool(big)
+        x = torch.concat([x, big], dim=1)
         x = torch.flatten(x, 1)
-        x = self.mod(x)
+        x = self.modFinal(x)
         return x
 
 
