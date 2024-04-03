@@ -347,7 +347,7 @@ class nntracker_respi(ParameterRequiringGradModule):
             ),
         )
 
-        chanProc8 = 224
+        chanProc8 = 160
         self.proc8 = nn.Sequential(
             nn.Conv2d(112, chanProc8, 3, stride=1, padding="same"),
             nn.BatchNorm2d(chanProc8),
@@ -411,9 +411,10 @@ class nntracker_respi(ParameterRequiringGradModule):
 
 def getmodel(model0: torch.nn.Module, modelpath, device):
     model = setModule(model0, path=modelpath, device=device)
-    print(
-        f"#param={np.sum([p.numel() for n, p in model.named_parameters() if p.requires_grad])}"
+    paramNum = np.sum(
+        [p.numel() for n, p in model.named_parameters() if p.requires_grad]
     )
+    print(f"{paramNum=}")
     # print(model)
     return model
 
