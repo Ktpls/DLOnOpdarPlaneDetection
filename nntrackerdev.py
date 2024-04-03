@@ -45,6 +45,8 @@ model = getmodel(
             "features.15",
             "features.16",
         ),
+        dropout=0.2,
+        # path16=False,
     ),
     modelpath,
     device,
@@ -174,7 +176,7 @@ trainpipe.train(
     torch.optim.AdamW(
         model.parameters(),
         lr=1e-4,
-        weight_decay=1e-2,
+        weight_decay=1e-5,
     ),
     trainmainprogress,
     epochnum=10,

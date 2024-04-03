@@ -301,6 +301,8 @@ class nntracker_respi(ParameterRequiringGradModule):
         freeLayers=list(),
         loadPretrainedBackbone=True,
         dropout=0.2,
+        path16=False,
+        path8=True,
     ):
         super().__init__()
         weights = torchvision.models.MobileNet_V3_Large_Weights.DEFAULT
@@ -310,63 +312,58 @@ class nntracker_respi(ParameterRequiringGradModule):
         self.backbone = backbone
         self.setBackboneFree(freeLayers)
         self.backbonepreproc = weights.transforms(antialias=True)
+        blindPath = lambda x: []
+        self.path16 = path16
+        self.path8 = path8
+        if path16:
+            chanProc16 = 80
+            self.proc16 = nn.Sequential(
+                nn.Conv2d(40, chanProc16, 3, stride=1, padding="same"),
+                nn.BatchNorm2d(chanProc16),
+                nn.Hardswish(),
+                OneShotAggregationResThrough(
+                    nn.Sequential(
+                        nn.Conv2d(chanProc16, chanProc16, 3, stride=1, padding="same"),
+                        nn.BatchNorm2d(chanProc16),
+                        nn.Hardswish(),
+                    ),
+                    nn.Sequential(
+                        nn.Conv2d(chanProc16, chanProc16, 3, stride=1, padding="same"),
+                        nn.BatchNorm2d(chanProc16),
+                        nn.Hardswish(),
+                    ),
+                    chanTotal=chanProc16 * 3,
+                    chanDest=chanProc16,
+                ),
+            )
+        else:
+            chanProc16 = 0
+            self.proc16 = blindPath
 
-        # self.mod = nn.Sequential(
-        #     nn.Sequential(
-        #         nn.Linear(backboneOutShape, 256),
-        #         nn.LeakyReLU(),
-        #         nn.Dropout(),
-        #     ),
-        #     nn.Sequential(
-        #         nn.Linear(256, 128),
-        #         nn.LeakyReLU(),
-        #         nn.Dropout(),
-        #     ),
-        #     nn.Linear(128, 4),
-        #     nn.LeakyReLU(),
-        # )
-
-        chanProc16 = 80
-        self.proc16 = nn.Sequential(
-            nn.Conv2d(40, chanProc16, 3, stride=1, padding="same"),
-            nn.BatchNorm2d(chanProc16),
-            nn.Hardswish(),
-            OneShotAggregationResThrough(
-                nn.Sequential(
-                    nn.Conv2d(chanProc16, chanProc16, 3, stride=1, padding="same"),
-                    nn.BatchNorm2d(chanProc16),
-                    nn.Hardswish(),
+        if path8:
+            chanProc8 = 160
+            self.proc8 = nn.Sequential(
+                nn.Conv2d(112, chanProc8, 3, stride=1, padding="same"),
+                nn.BatchNorm2d(chanProc8),
+                nn.Hardswish(),
+                OneShotAggregationResThrough(
+                    nn.Sequential(
+                        nn.Conv2d(chanProc8, chanProc8, 3, stride=1, padding="same"),
+                        nn.BatchNorm2d(chanProc8),
+                        nn.Hardswish(),
+                    ),
+                    nn.Sequential(
+                        nn.Conv2d(chanProc8, chanProc8, 3, stride=1, padding="same"),
+                        nn.BatchNorm2d(chanProc8),
+                        nn.Hardswish(),
+                    ),
+                    chanTotal=chanProc8 * 3,
+                    chanDest=chanProc8,
                 ),
-                nn.Sequential(
-                    nn.Conv2d(chanProc16, chanProc16, 3, stride=1, padding="same"),
-                    nn.BatchNorm2d(chanProc16),
-                    nn.Hardswish(),
-                ),
-                chanTotal=chanProc16 * 3,
-                chanDest=chanProc16,
-            ),
-        )
-
-        chanProc8 = 160
-        self.proc8 = nn.Sequential(
-            nn.Conv2d(112, chanProc8, 3, stride=1, padding="same"),
-            nn.BatchNorm2d(chanProc8),
-            nn.Hardswish(),
-            OneShotAggregationResThrough(
-                nn.Sequential(
-                    nn.Conv2d(chanProc8, chanProc8, 3, stride=1, padding="same"),
-                    nn.BatchNorm2d(chanProc8),
-                    nn.Hardswish(),
-                ),
-                nn.Sequential(
-                    nn.Conv2d(chanProc8, chanProc8, 3, stride=1, padding="same"),
-                    nn.BatchNorm2d(chanProc8),
-                    nn.Hardswish(),
-                ),
-                chanTotal=chanProc8 * 3,
-                chanDest=chanProc8,
-            ),
-        )
+            )
+        else:
+            chanProc8 = 0
+            self.proc8 = blindPath
 
         backboneOutShape = 960
         last_channel = 1280 // 2
@@ -394,15 +391,13 @@ class nntracker_respi(ParameterRequiringGradModule):
                 out8 = x
         out8 = self.proc8(out8)
         out16 = self.proc16(out16)
+        pathes = [x]
+        if self.path16:
+            pathes.append(out16)
+        if self.path8:
+            pathes.append(out8)
         x = torch.concat(
-            [
-                torch.flatten(self.backbone.avgpool(o), 1)
-                for o in [
-                    x,
-                    out8,
-                    out16,
-                ]
-            ],
+            [torch.flatten(self.backbone.avgpool(o), 1) for o in pathes],
             dim=1,
         )
         x = self.discriminatorFinal(x)
