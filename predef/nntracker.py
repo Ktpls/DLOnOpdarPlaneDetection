@@ -326,32 +326,53 @@ class nntracker_respi(ParameterRequiringGradModule):
         #     nn.LeakyReLU(),
         # )
 
-        chanModBig = 224
-        self.modBig = nn.Sequential(
-            nn.Conv2d(112, chanModBig, 3, stride=2, padding=0),
-            nn.BatchNorm2d(chanModBig),
+        chanProc16 = 80
+        self.proc16 = nn.Sequential(
+            nn.Conv2d(40, chanProc16, 3, stride=1, padding="same"),
+            nn.BatchNorm2d(chanProc16),
             nn.Hardswish(),
             OneShotAggregationResThrough(
                 nn.Sequential(
-                    nn.Conv2d(chanModBig, chanModBig, 3, stride=1, padding="same"),
-                    nn.BatchNorm2d(chanModBig),
+                    nn.Conv2d(chanProc16, chanProc16, 3, stride=1, padding="same"),
+                    nn.BatchNorm2d(chanProc16),
                     nn.Hardswish(),
                 ),
                 nn.Sequential(
-                    nn.Conv2d(chanModBig, chanModBig, 3, stride=1, padding="same"),
-                    nn.BatchNorm2d(chanModBig),
+                    nn.Conv2d(chanProc16, chanProc16, 3, stride=1, padding="same"),
+                    nn.BatchNorm2d(chanProc16),
                     nn.Hardswish(),
                 ),
-                chanTotal=chanModBig * 3,
-                chanDest=chanModBig,
+                chanTotal=chanProc16 * 3,
+                chanDest=chanProc16,
+            ),
+        )
+
+        chanProc8 = 224
+        self.proc8 = nn.Sequential(
+            nn.Conv2d(112, chanProc8, 3, stride=1, padding="same"),
+            nn.BatchNorm2d(chanProc8),
+            nn.Hardswish(),
+            OneShotAggregationResThrough(
+                nn.Sequential(
+                    nn.Conv2d(chanProc8, chanProc8, 3, stride=1, padding="same"),
+                    nn.BatchNorm2d(chanProc8),
+                    nn.Hardswish(),
+                ),
+                nn.Sequential(
+                    nn.Conv2d(chanProc8, chanProc8, 3, stride=1, padding="same"),
+                    nn.BatchNorm2d(chanProc8),
+                    nn.Hardswish(),
+                ),
+                chanTotal=chanProc8 * 3,
+                chanDest=chanProc8,
             ),
         )
 
         backboneOutShape = 960
         last_channel = 1280 // 2
 
-        self.modFinal = nn.Sequential(
-            nn.Linear(backboneOutShape + chanModBig, last_channel),
+        self.discriminatorFinal = nn.Sequential(
+            nn.Linear(backboneOutShape + chanProc8 + chanProc16, last_channel),
             nn.Hardswish(inplace=True),
             nn.Dropout(dropout),
             nn.Linear(last_channel, 4),
@@ -367,14 +388,24 @@ class nntracker_respi(ParameterRequiringGradModule):
     def forward(self, x):
         for i, module in enumerate(self.backbone.features):
             x = module(x)
-            if i == 12:
-                big = x
-        x = self.backbone.avgpool(x)
-        big = self.modBig(big)
-        big = self.backbone.avgpool(big)
-        x = torch.concat([x, big], dim=1)
-        x = torch.flatten(x, 1)
-        x = self.modFinal(x)
+            if i == 6:
+                out16 = x
+            elif i == 12:
+                out8 = x
+        out8 = self.proc8(out8)
+        out16 = self.proc16(out16)
+        x = torch.concat(
+            [
+                torch.flatten(self.backbone.avgpool(o), 1)
+                for o in [
+                    x,
+                    out8,
+                    out16,
+                ]
+            ],
+            dim=1,
+        )
+        x = self.discriminatorFinal(x)
         return x
 
 
