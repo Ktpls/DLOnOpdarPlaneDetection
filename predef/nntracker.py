@@ -391,10 +391,7 @@ class nntracker_respi(FinalModule):
                 out16 = x
             elif i == 12:
                 out8 = x
-            elif i == 16:
-                out4 = x
-                break
-        out4 = self.chan4Simplifier(out4)
+        out4 = self.chan4Simplifier(x)
         summed = self.summing4And8(torch.concat([out8, self.upsampler(out4)], dim=1))
         sum16 = self.proc16(torch.concat([out16, self.upsampler(summed)], dim=1))
         sum8 = self.proc8(torch.concat([summed, self.down16to8(sum16)], dim=1))
