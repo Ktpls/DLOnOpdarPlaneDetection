@@ -287,7 +287,7 @@ class FinalModule(nn.Module):
         )
 
 
-class nntracker_respi(ParameterRequiringGradModule):
+class nntracker_respi(FinalModule):
     def __init__(
         self,
         freeLayers=list(),
