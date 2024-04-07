@@ -368,12 +368,14 @@ class labeldataset(torch.utils.data.Dataset):
                     lbl = cv.resize(lbl, stdShape)
                     lbl = cv.threshold(lbl[:, :, 0:1], 0.5, 1, cv.THRESH_BINARY)[1]
                 pi = lbl2PlaneInfo(lbl)
+                # simple check
+                assert pi[3] <1 ,f"image {p} have too big wingspan"
                 items.append(SampleItem(p, spl, lbl, pi))
                 prog.update(i)
-            self.items = items
             prog.setFinish()
         else:
-            self.items = list()
+            items = list()
+        self.items:list[SampleItem] = items
         self.augger = NonAffineTorchAutoAugment()
         self.totensor = torchvision.transforms.ToTensor()
 
