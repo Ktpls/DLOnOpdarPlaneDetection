@@ -266,19 +266,7 @@ class MPn(nn.Module):
         return self.combiner(torch.concat([o_pool, o_conv], dim=1))
 
 
-class ParameterRequiringGradModule(torch.nn.Module):
-    def parameters(
-        self, recurse: bool = True
-    ) -> typing.Iterator[torch.nn.parameter.Parameter]:
-        return filter(
-            lambda x: x.requires_grad is not False, super().parameters(recurse)
-        )
-
-
-class FinalModule(nn.Module):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
+class FinalModule(torch.nn.Module):
     def parameters(
         self, recurse: bool = True
     ) -> typing.Iterator[torch.nn.parameter.Parameter]:
@@ -295,16 +283,16 @@ class nntracker_respi(FinalModule):
         dropout=0.2,
     ):
         super().__init__()
-        weights = torchvision.models.MobileNet_V3_Large_Weights.DEFAULT
-        backbone = torchvision.models.mobilenet_v3_large(
+        weights = torchvision.models.MobileNet_V3_Small_Weights.DEFAULT
+        backbone = torchvision.models.mobilenet_v3_small(
             weights=weights if loadPretrainedBackbone else None
         )
         self.backbone = backbone
         self.setBackboneFree(freeLayers)
         self.backbonepreproc = weights.transforms(antialias=True)
-        chanProc16 = 40
-        chanProc8 = 112
-        chanProc4 = 960
+        chanProc16 = 24
+        chanProc8 = 48
+        chanProc4 = 576
         chanProc4Simplified = 160
         self.upsampler = nn.Upsample(scale_factor=2, mode="bilinear")
 
@@ -387,11 +375,14 @@ class nntracker_respi(FinalModule):
     def forward(self, x):
         for i, module in enumerate(self.backbone.features):
             x = module(x)
-            if i == 6:
+            if i == 3:
                 out16 = x
-            elif i == 12:
+            elif i == 8:
                 out8 = x
-        out4 = self.chan4Simplifier(x)
+            elif i == 12:
+                out4 = x
+                break
+        out4 = self.chan4Simplifier(out4)
         summed = self.summing4And8(torch.concat([out8, self.upsampler(out4)], dim=1))
         sum16 = self.proc16(torch.concat([out16, self.upsampler(summed)], dim=1))
         sum8 = self.proc8(torch.concat([summed, self.down16to8(sum16)], dim=1))
