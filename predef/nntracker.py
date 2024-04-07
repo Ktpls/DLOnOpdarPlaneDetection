@@ -308,11 +308,11 @@ class nntracker_respi(ParameterRequiringGradModule):
         chanProc4Simplified = 160
         self.upsampler = nn.Upsample(scale_factor=2, mode="bilinear")
 
-        # self.chan4Simplifier = nn.Sequential(
-        #     nn.Conv2d(chanProc4, chanProc4Simplified, 1, stride=1, padding="same"),
-        #     nn.BatchNorm2d(chanProc4Simplified),
-        #     nn.Hardswish(),
-        # )
+        self.chan4Simplifier = nn.Sequential(
+            nn.Conv2d(chanProc4, chanProc4Simplified, 1, stride=1, padding="same"),
+            nn.BatchNorm2d(chanProc4Simplified),
+            nn.Hardswish(),
+        )
 
         self.summing4And8 = nn.Sequential(
             nn.Conv2d(
@@ -391,10 +391,10 @@ class nntracker_respi(ParameterRequiringGradModule):
                 out16 = x
             elif i == 12:
                 out8 = x
-            elif i == 15:
+            elif i == 16:
                 out4 = x
                 break
-        # out4 = self.chan4Simplifier(out4)
+        out4 = self.chan4Simplifier(out4)
         summed = self.summing4And8(torch.concat([out8, self.upsampler(out4)], dim=1))
         sum16 = self.proc16(torch.concat([out16, self.upsampler(summed)], dim=1))
         sum8 = self.proc8(torch.concat([summed, self.down16to8(sum16)], dim=1))
