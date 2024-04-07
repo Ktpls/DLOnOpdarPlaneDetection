@@ -283,16 +283,16 @@ class nntracker_respi(FinalModule):
         dropout=0.2,
     ):
         super().__init__()
-        weights = torchvision.models.MobileNet_V3_Small_Weights.DEFAULT
-        backbone = torchvision.models.mobilenet_v3_small(
+        weights = torchvision.models.MobileNet_V3_Large_Weights.DEFAULT
+        backbone = torchvision.models.mobilenet_v3_large(
             weights=weights if loadPretrainedBackbone else None
         )
         self.backbone = backbone
         self.setBackboneFree(freeLayers)
         self.backbonepreproc = weights.transforms(antialias=True)
-        chanProc16 = 24
-        chanProc8 = 48
-        chanProc4 = 576
+        chanProc16 = 40
+        chanProc8 = 112
+        chanProc4 = 960
         chanProc4Simplified = 160
         self.upsampler = nn.Upsample(scale_factor=2, mode="bilinear")
 
@@ -375,11 +375,11 @@ class nntracker_respi(FinalModule):
     def forward(self, x):
         for i, module in enumerate(self.backbone.features):
             x = module(x)
-            if i == 3:
+            if i == 6:
                 out16 = x
-            elif i == 8:
-                out8 = x
             elif i == 12:
+                out8 = x
+            elif i == 16:
                 out4 = x
                 break
         out4 = self.chan4Simplifier(out4)
