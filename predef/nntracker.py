@@ -7,15 +7,6 @@ from .nntrackerdev_predef import *
 # nn def
 
 
-class ParameterRequiringGradModule(torch.nn.Module):
-    def parameters(
-        self, recurse: bool = True
-    ) -> typing.Iterator[torch.nn.parameter.Parameter]:
-        return filter(
-            lambda x: x.requires_grad is not False, super().parameters(recurse)
-        )
-
-
 def PositionalEmbedding2D(shape, depth, len_max=None):
     if len_max is None:
         len_max = 10000
@@ -42,7 +33,7 @@ def PositionalEmbedding2D(shape, depth, len_max=None):
     return pe.reshape([1, -1, depth])
 
 
-class SemanticInjectionModule(torch.nn.Module):
+class SemanticInjection(torch.nn.Module):
     def __init__(self, localdim, globaldim=None, outdim=None):
         if globaldim is None:
             globaldim = localdim
@@ -107,195 +98,189 @@ class GlobalAvePooling(nn.Module):
         return GlobalAvePooling.static_forward(x)
 
 
-class ConvNext(nn.Module):
-    def __init__(self, infeat, outfeat, ks=3):
+class ELAN(nn.Module):
+    def __init__(self, in_channels, out_channels):
         super().__init__()
-        self.conv = nn.Conv2d(infeat, outfeat, ks, padding="same")
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        assert out_channels % 2 == 0
+        self.outHalf = out_channels // 2
+        self.wayComplex = nn.Sequential(
+            nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, 3, padding="same"),
+                nn.BatchNorm2d(out_channels),
+                nn.Hardswish(),
+            ),
+            nn.Sequential(
+                nn.Conv2d(out_channels, out_channels, 3, padding="same"),
+                nn.BatchNorm2d(out_channels),
+                nn.Hardswish(),
+                nn.Conv2d(out_channels, out_channels, 3, padding="same"),
+                nn.BatchNorm2d(out_channels),
+                nn.Hardswish(),
+            ),
+            nn.Sequential(
+                nn.Conv2d(out_channels, out_channels, 3, padding="same"),
+                nn.BatchNorm2d(out_channels),
+                nn.Hardswish(),
+                nn.Conv2d(out_channels, out_channels, 3, padding="same"),
+                nn.BatchNorm2d(out_channels),
+                nn.Hardswish(),
+            ),
+        )
+        self.waySimple = (
+            nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, 3, padding="same"),
+                nn.BatchNorm2d(out_channels),
+                nn.Hardswish(),
+            ),
+        )
+        self.combiner = nn.Sequential(
+            nn.Conv2d(out_channels * 2, out_channels, 1),
+            nn.BatchNorm2d(out_channels),
+            nn.Hardswish(),
+        )
 
     def forward(self, x):
-        return self.conv(x)
-
-
-class nntracker_pi(ParameterRequiringGradModule):
-    """
-    got pic
-    preproc
-    scale0
-    |---zoom to scale1
-    |   |---zoom to scale2
-    |   |   |
-    #---#---to scale0
-    |
-    #summary
-    |---zoom to scale1
-    |   |---zoom to scale2
-    |   |   |
-    """
-
-    sizeInput = 128
-    interpolation = torchvision.transforms.InterpolationMode.BILINEAR
-    antialias = False
-    useBn = True
-    incver = "v2"
-
-    def __init__(self):
-        super().__init__()
-        vp_incept = lambda infeat, outfeat: (
-            inception.even(
-                infeat=infeat,
-                outfeat=outfeat,
-                bn=nntracker_pi.useBn,
-                version=nntracker_pi.incver,
-            )
-        )
-        vp_conv = lambda infeat, outfeat: (
-            (
-                nn.Sequential(
-                    nn.Conv2d(infeat, outfeat, 3, padding="same"),
-                    nn.BatchNorm2d(outfeat),
-                )
-            )
-            if nntracker_pi.useBn
-            else nn.Conv2d(infeat, outfeat, 3, padding="same")
-        )
-        vp_next = lambda infeat, outfeat: ()
-        visionProcessor = vp_conv
-
-        chanS0 = 16
-        factorS0 = 4
-        chanS1 = 32
-        factorS1 = 2
-        chanS2 = 64
-        factorS2 = 2
-        self.preproc = nn.Sequential(
-            visionProcessor(3, chanS0),
-            nn.MaxPool2d(factorS0),
-        )
-        self.s0tos1 = nn.Sequential(
-            nn.MaxPool2d(factorS1),
-        )
-        self.s1tos2 = nn.Sequential(
-            nn.MaxPool2d(factorS2),
-        )
-        self.s2tos1 = nn.Sequential(
-            nn.UpsamplingNearest2d(scale_factor=factorS2),
-        )
-        self.s1tos0 = nn.Sequential(
-            nn.UpsamplingNearest2d(scale_factor=factorS1),
-        )
-        self.featExtS0 = OneShotAggregationResThrough(
-            visionProcessor(chanS0, chanS0),
-            visionProcessor(chanS0, chanS0),
-            chanTotal=3 * chanS0,
-            chanDest=chanS0,
-        )
-        self.featExtS1 = OneShotAggregationResThrough(
-            visionProcessor(chanS0, chanS1),
-            visionProcessor(chanS1, chanS1),
-            visionProcessor(chanS1, chanS1),
-            chanTotal=chanS0 + 3 * chanS1,
-            chanDest=chanS1,
-        )
-
-        self.featExtS2 = OneShotAggregationResThrough(
-            visionProcessor(chanS0, chanS2),
-            visionProcessor(chanS2, chanS2),
-            visionProcessor(chanS2, chanS2),
-            chanTotal=chanS0 + 3 * chanS2,
-            chanDest=chanS2,
-        )
-
-        chanBroadcast = chanS0 + chanS1 + chanS2
-        self.broadcast = OneShotAggregationResThrough(
-            visionProcessor(chanS0 + chanS1 + chanS2, chanBroadcast),
-            visionProcessor(chanBroadcast, chanBroadcast),
-            visionProcessor(chanBroadcast, chanBroadcast),
-            chanTotal=(chanS0 + chanS1 + chanS2) + 3 * chanBroadcast,
-            chanDest=chanBroadcast,
-        )
-
-        self.featExtS0Br = OneShotAggregationResThrough(
-            visionProcessor(chanBroadcast + chanS0, chanS0),
-            visionProcessor(chanS0, chanS0),
-            visionProcessor(chanS0, chanS0),
-            chanTotal=chanBroadcast + chanS0 + 3 * chanS0,
-            chanDest=chanS0,
-        )
-
-        self.featExtS1Br = OneShotAggregationResThrough(
-            visionProcessor(chanBroadcast + chanS1, chanS1),
-            visionProcessor(chanS1, chanS1),
-            visionProcessor(chanS1, chanS1),
-            chanTotal=chanBroadcast + chanS1 + 3 * chanS1,
-            chanDest=chanS1,
-        )
-
-        self.featExtS2Br = OneShotAggregationResThrough(
-            visionProcessor(chanBroadcast + chanS2, chanS2),
-            visionProcessor(chanS2, chanS2),
-            visionProcessor(chanS2, chanS2),
-            chanTotal=chanBroadcast + chanS2 + 3 * chanS2,
-            chanDest=chanS2,
-        )
-
-        self.head = nn.Sequential(
-            nn.Linear(chanBroadcast, 256),
-            nn.LeakyReLU(),
-            nn.Dropout(),
-            nn.Linear(256, 256),
-            nn.LeakyReLU(),
-            nn.Dropout(),
-            nn.Linear(256, 4),
-            nn.LeakyReLU(),
-        )
-
-    def forward(self, m):
-        def concatChan(*l):
-            return torch.concat(l, dim=1)
-
-        # preproc
-        m = TTF.resize(
-            m,
-            size=nntracker_pi.sizeInput,
-            interpolation=nntracker_pi.interpolation,
-            antialias=nntracker_pi.antialias,
-        )
-        s0 = self.preproc(m)
-        s1 = self.s0tos1(s0)
-        s2 = self.s1tos2(s1)
-        # featExt
-        s0 = self.featExtS0(s0)
-        s1 = self.featExtS1(s1)
-        s2 = self.featExtS2(s2)
-        # broadcast within scale
-        br = self.broadcast(
-            concatChan(
-                s0,
-                self.s1tos0(s1),
-                self.s1tos0(self.s2tos1(s2)),
-            )
-        )
-        # continue featExt
-        brS0 = br
-        s0 = self.featExtS0Br(concatChan(brS0, s0))
-        brS1 = self.s0tos1(br)
-        s1 = self.featExtS1Br(concatChan(brS1, s1))
-        brS2 = self.s1tos2(brS1)
-        s2 = self.featExtS2Br(concatChan(brS2, s2))
-        out = self.head(
+        o_simp = self.waySimple(x)
+        o_comp0 = self.wayComplex[0](x)
+        o_comp1 = self.wayComplex[1](o_comp0)
+        o_comp2 = self.wayComplex[2](o_comp1)
+        return self.combiner(
             torch.concat(
-                (
-                    GlobalAvePooling.static_forward(s0),
-                    GlobalAvePooling.static_forward(s1),
-                    GlobalAvePooling.static_forward(s2),
-                ),
-                dim=-1,
+                [
+                    o_simp[: self.outHalf],
+                    o_comp0[: self.outHalf],
+                    o_comp1[: self.outHalf],
+                    o_comp2[: self.outHalf],
+                ],
+                dim=1,
             )
         )
-        return out
 
 
-class nntracker_respi(ParameterRequiringGradModule):
+class ELAN_H(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        assert out_channels % 4 == 0
+        self.outHalf = out_channels // 2
+        self.outQuad = out_channels // 4
+        self.wayComplex = nn.Sequential(
+            nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, 3, padding="same"),
+                nn.BatchNorm2d(out_channels),
+                nn.Hardswish(),
+            ),
+            nn.Sequential(
+                nn.Conv2d(out_channels, out_channels, 3, padding="same"),
+                nn.BatchNorm2d(out_channels),
+                nn.Hardswish(),
+            ),
+            nn.Sequential(
+                nn.Conv2d(out_channels, out_channels, 3, padding="same"),
+                nn.BatchNorm2d(out_channels),
+                nn.Hardswish(),
+            ),
+            nn.Sequential(
+                nn.Conv2d(out_channels, out_channels, 3, padding="same"),
+                nn.BatchNorm2d(out_channels),
+                nn.Hardswish(),
+            ),
+            nn.Sequential(
+                nn.Conv2d(out_channels, out_channels, 3, padding="same"),
+                nn.BatchNorm2d(out_channels),
+                nn.Hardswish(),
+            ),
+        )
+        self.waySimple = (
+            nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, 3, padding="same"),
+                nn.BatchNorm2d(out_channels),
+                nn.Hardswish(),
+            ),
+        )
+        self.combiner = nn.Sequential(
+            nn.Conv2d(out_channels * 2, out_channels, 1),
+            nn.BatchNorm2d(out_channels),
+            nn.Hardswish(),
+        )
+
+    def forward(self, x):
+        o_simp = self.waySimple(x)
+        o_comp0 = self.wayComplex[0](x)
+        o_comp1 = self.wayComplex[1](o_comp0)
+        o_comp2 = self.wayComplex[2](o_comp1)
+        o_comp3 = self.wayComplex[3](o_comp2)
+        o_comp4 = self.wayComplex[4](o_comp3)
+        return self.combiner(
+            torch.concat(
+                [
+                    o_simp[:, : self.outHalf],
+                    o_comp0[:, : self.outHalf],
+                    o_comp1[:, : self.outQuad],
+                    o_comp2[:, : self.outQuad],
+                    o_comp3[:, : self.outQuad],
+                    o_comp4[
+                        :, : self.outQuad
+                    ],  # is it correct? half of the output wont be used
+                ],
+                dim=1,
+            )
+        )
+
+
+class MPn(nn.Module):
+    def __init__(self, in_channels, n_value, downSamplingStride=2):
+        super().__init__()
+        self.in_channels = in_channels
+        assert in_channels % 2 == 0
+        cHalf = in_channels // 2
+        self.cHalf = cHalf
+        out_channels = n_value * in_channels
+        self.out_channels = out_channels
+        self.wayPooling = nn.Sequential(
+            nn.MaxPool2d(downSamplingStride, downSamplingStride),
+            nn.Conv2d(cHalf, cHalf, 3, padding="same"),
+            nn.BatchNorm2d(cHalf),
+            nn.Hardswish(),
+        )
+        self.wayConv = nn.Sequential(
+            nn.Conv2d(
+                cHalf, cHalf, downSamplingStride, stride=downSamplingStride, padding=0
+            ),
+            nn.BatchNorm2d(cHalf),
+            nn.Hardswish(),
+            nn.Conv2d(cHalf, cHalf, 3, padding="same"),
+            nn.BatchNorm2d(cHalf),
+            nn.Hardswish(),
+        )
+        self.combiner = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, 1),
+            nn.BatchNorm2d(out_channels),
+            nn.Hardswish(),
+        )
+
+    def forward(self, x):
+        o_pool = self.wayPooling(x[:, : self.cHalf])
+        o_conv = self.wayConv(x[:, self.cHalf :])
+        return self.combiner(torch.concat([o_pool, o_conv], dim=1))
+
+
+class FinalModule(nn.Module):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def parameters(
+        self, recurse: bool = True
+    ) -> typing.Iterator[torch.nn.parameter.Parameter]:
+        return filter(
+            lambda x: x.requires_grad is not False, super().parameters(recurse)
+        )
+
+
+class nntracker_respi(FinalModule):
     def __init__(
         self,
         freeLayers=list(),
@@ -303,16 +288,16 @@ class nntracker_respi(ParameterRequiringGradModule):
         dropout=0.2,
     ):
         super().__init__()
-        weights = torchvision.models.MobileNet_V3_Large_Weights.DEFAULT
-        backbone = torchvision.models.mobilenet_v3_large(
+        weights = torchvision.models.MobileNet_V3_Small_Weights.DEFAULT
+        backbone = torchvision.models.mobilenet_v3_small(
             weights=weights if loadPretrainedBackbone else None
         )
         self.backbone = backbone
         self.setBackboneFree(freeLayers)
         self.backbonepreproc = weights.transforms(antialias=True)
-        chanProc16 = 40
-        chanProc8 = 112
-        chanProc4 = 960
+        chanProc16 = 24
+        chanProc8 = 48
+        chanProc4 = 576
         chanProc4Simplified = 160
         self.upsampler = nn.Upsample(scale_factor=2, mode="bilinear")
 
@@ -395,9 +380,9 @@ class nntracker_respi(ParameterRequiringGradModule):
     def forward(self, x):
         for i, module in enumerate(self.backbone.features):
             x = module(x)
-            if i == 6:
+            if i == 3:
                 out16 = x
-            elif i == 12:
+            elif i == 8:
                 out8 = x
         out4 = self.chan4Simplifier(x)
         summed = self.summing4And8(torch.concat([out8, self.upsampler(out4)], dim=1))

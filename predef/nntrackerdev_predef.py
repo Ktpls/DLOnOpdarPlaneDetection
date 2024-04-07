@@ -547,7 +547,7 @@ def findBads(model, calclose, device, datasetFrom, datasetTo, numDesired, thresh
     print(f"{badFound=}, {sampleItered=}")
 
 
-def savemodel(model, path):
+def savemodel(model:nn.Module, path):
     torch.save(model.state_dict(), path)
     print(f"Saved PyTorch Model State to {path}")
 
