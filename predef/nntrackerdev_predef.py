@@ -1,6 +1,21 @@
 from .utilkaggle import *
 
 stdShape = [128, 128]
+import importlib
+import sys
+
+
+def import_or_reload(module_name):
+    module = sys.modules.get(module_name)
+    if module is None:
+        try:
+            module = importlib.import_module(module_name)
+        except ImportError:
+            module = None
+    else:
+        module = importlib.reload(module)
+
+    return module
 
 
 class ImgReader:
@@ -531,11 +546,16 @@ class ModelEvaluation:
             lambda result: loss_values.append(result.loss),
             num_draws=num_draws,
         )
+        loss_values = np.array(loss_values)
 
         plt.hist(loss_values, bins=100, color="blue", edgecolor="black")
         plt.xlabel("Loss Value")
         plt.ylabel("Frequency")
         plt.title("Loss Distribution")
+        aveLoss = np.sum(loss_values) / len(loss_values)
+        stdErr = np.std(loss_values)
+        print(f"{aveLoss=}")
+        print(f"{stdErr=}")
 
     def viewmodel(self, isWanted=None):
         isWanted = isWanted if isWanted else lambda x: True

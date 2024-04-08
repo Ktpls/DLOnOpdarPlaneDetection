@@ -10,7 +10,9 @@ if not os.path.exists(projPath):
 
 # %%
 # basics
+from predef.nntrackerdev_predef import *
 
+nnt = import_or_reload("predef.nntracker")
 from predef.nntracker import *
 
 RunOnWtUtilityEnviroment = True
