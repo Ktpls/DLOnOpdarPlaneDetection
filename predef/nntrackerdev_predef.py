@@ -369,13 +369,13 @@ class labeldataset(torch.utils.data.Dataset):
                     lbl = cv.threshold(lbl[:, :, 0:1], 0.5, 1, cv.THRESH_BINARY)[1]
                 pi = lbl2PlaneInfo(lbl)
                 # simple check
-                assert pi[3] <1 ,f"image {p} have too big wingspan"
+                assert pi[3] < 1, f"image {p} have too big wingspan"
                 items.append(SampleItem(p, spl, lbl, pi))
                 prog.update(i)
             prog.setFinish()
         else:
             items = list()
-        self.items:list[SampleItem] = items
+        self.items: list[SampleItem] = items
         self.augger = NonAffineTorchAutoAugment()
         self.totensor = torchvision.transforms.ToTensor()
 
@@ -471,34 +471,92 @@ def PI2Str(pi):
     return ",".join([f"{i:.2f}" for i in pi])
 
 
-def viewmodel(model: torch.nn.Module, device, datasetusing, calcloss, isWanted=None):
-    model.eval()
-    mpp = MassivePicturePlot([7, 8])
-    samplenum = np.prod([7, 4])
-    imshowconfig = {"vmin": 0, "vmax": 1}
-    totalinferencetime = 0
-    infercount = 0
-    totalLoss = 0
-    isWanted = isWanted if isWanted else lambda x: True
+@dataclasses.dataclass
+class ModelEvaluation:
+    model: nn.Module
+    device: str
+    dataset: labeldataset
+    calclose: typing.Callable
 
-    with torch.no_grad():
-        for i in range(samplenum):
-            while True:
-                src, lbl, pi = datasetusing[0]
-                tstart = time.perf_counter()
-                pihat = model.forward(src.unsqueeze(0).to(device))
-                tend = time.perf_counter()
-                loss = calcloss(pi.unsqueeze(0).to(device), pihat).item()
-                if isWanted(loss):
-                    break
+    @dataclasses.dataclass
+    class InferenceResult:
+        src: torch.Tensor
+        lbl: torch.Tensor
+        pi: torch.Tensor
+        pihat: torch.Tensor
+        loss: float
+        timeConsumption: float
 
-            totalLoss += loss
-            totalinferencetime += tend - tstart
+    def DrawData(self, i=None):
+        if i is None:
+            # draw random
+            return self.dataset[0]
+        else:
+            return self.dataset.items[i]
+
+    def Inference(self, src: torch.Tensor):
+        return self.model.forward(src.unsqueeze(0).to(self.device))
+
+    def Calcloss(self, pi: torch.Tensor, pihat: torch.Tensor):
+        return self.calclose(pi.unsqueeze(0).to(self.device), pihat).item()
+
+    def IterDataAndInference(self, iterWork: typing.Callable, num_draws):
+        """
+        iteration common method
+        """
+        self.model.eval()
+        with torch.no_grad():
+            prog = Progress(num_draws)
+            for i in range(num_draws):
+                while True:
+                    src, lbl, pi = self.DrawData()
+                    tstart = time.perf_counter()
+                    pihat = self.Inference(src)
+                    tend = time.perf_counter()
+                    loss = self.Calcloss(pi, pihat)
+                    ret = iterWork(
+                        ModelEvaluation.InferenceResult(
+                            src, lbl, pi, pihat, loss, tend - tstart
+                        )
+                    )
+                    # not specicified to be False
+                    if ret != False:
+                        break
+                prog.update(i)
+            prog.setFinish()
+
+    def draw_data_inference(self, num_draws=100):
+        loss_values = []
+        self.IterDataAndInference(
+            lambda result: loss_values.append(result.loss),
+            num_draws=num_draws,
+        )
+
+        plt.hist(loss_values, bins=100, color="blue", edgecolor="black")
+        plt.xlabel("Loss Value")
+        plt.ylabel("Frequency")
+        plt.title("Loss Distribution")
+
+    def viewmodel(self, isWanted=None):
+        isWanted = isWanted if isWanted else lambda x: True
+        mpp = MassivePicturePlot([7, 8])
+        samplenum = np.prod([7, 4])
+        imshowconfig = {"vmin": 0, "vmax": 1}
+        totalinferencetime = 0
+        infercount = 0
+        totalLoss = 0
+
+        def iterWork(result: ModelEvaluation.InferenceResult):
+            nonlocal totalinferencetime, infercount, totalLoss
+            if not isWanted(result.loss):
+                return False
+            totalLoss += result.loss
+            totalinferencetime += result.timeConsumption
             infercount += 1
-            pihat = pihat[0].cpu().numpy()
+            pihat = result.pihat[0].cpu().numpy()
 
-            pi = pi.numpy()
-            src, lbl = [tensorimg2ndarray(d) for d in [src, lbl]]
+            pi = result.pi.numpy()
+            src, lbl = [tensorimg2ndarray(d) for d in [result.src, result.lbl]]
 
             mpp.toNextPlot()
             plt.title(PI2Str(pi))
@@ -520,36 +578,14 @@ def viewmodel(model: torch.nn.Module, device, datasetusing, calcloss, isWanted=N
 
             plt.title(PI2Str(pihat))
             plt.imshow(lblComparasion, label="lblComparasion", **imshowconfig)
-    print(f"average inference time={totalinferencetime / samplenum}")
-    print(f"average loss={totalLoss / samplenum}")
+
+        self.IterDataAndInference(iterWork, samplenum)
+
+        print(f"average inference time={totalinferencetime / samplenum}")
+        print(f"average loss={totalLoss / samplenum}")
 
 
-def findBads(model, calclose, device, datasetFrom, datasetTo, numDesired, thresh):
-    model.eval()
-    badFound = 0
-    sampleItered = 0
-    prog = Progress(numDesired)
-    with torch.no_grad():
-        while True:
-            if badFound >= numDesired:
-                break
-            prog.update(badFound)
-            index = datasetFrom.rndIndex()
-            item = datasetFrom.items[index]
-            item = datasetFrom.dataAug(item)
-            tup = datasetFrom.procItemToTensor(item)
-            src, lbl, pi = tup
-            pihat = model.forward(src.reshape((1,) + src.shape).to(device))[0]
-            loss = calclose(pi.reshape((1,) + pi.shape).to(device), pihat.to(device))
-            if loss.item() > thresh:
-                datasetTo.items.append(item)
-                badFound += 1
-            sampleItered += 1
-    prog.setFinish()
-    print(f"{badFound=}, {sampleItered=}")
-
-
-def savemodel(model:nn.Module, path):
+def savemodel(model: nn.Module, path):
     torch.save(model.state_dict(), path)
     print(f"Saved PyTorch Model State to {path}")
 

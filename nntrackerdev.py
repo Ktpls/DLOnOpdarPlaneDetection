@@ -192,8 +192,11 @@ savemodel(model, modelpath)
 
 # %%
 # view effect
-viewmodel(model, device, train_data, calclose)
+ModelEvaluation(model, device, train_data, calclose).viewmodel()
 
 
 # %%
 os.system("pause")
+
+
+# %%
