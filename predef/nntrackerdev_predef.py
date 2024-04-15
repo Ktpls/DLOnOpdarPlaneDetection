@@ -7,13 +7,13 @@ import sys
 
 def import_or_reload(module_name):
     module = sys.modules.get(module_name)
-    if module is None:
-        try:
+    try:
+        if module is None:
             module = importlib.import_module(module_name)
-        except ImportError:
-            module = None
-    else:
-        module = importlib.reload(module)
+        else:
+            module = importlib.reload(module)
+    except ImportError:
+        module = None
 
     return module
 
@@ -325,9 +325,18 @@ def draw_random_line(image, n):
 def gaussianNoise(src):
     sig = np.random.uniform(-0.05, 0.15)
     if sig >= EPS:
-        noise = np.random.normal(0, sig, src.shape) * np.max(src)
-        src = np.clip(src + noise, 0, 1, dtype=np.float32)
-    return src
+        max_, min_ = np.max(src), np.min(src)
+        noise = np.random.normal(0, sig, src.shape) * (max_ - min_)
+        src = src + noise
+    # gsig = np.random.uniform(-0.05, 0.15)
+    # if gsig >= EPS:
+    #     gray = np.mean(src, axis=2)
+    #     max_, min_ = np.max(gray), np.min(gray)
+    #     noise = np.expand_dims(np.random.normal(0, gsig, src.shape[0:2]), axis=2) * (
+    #         max_ - min_
+    #     )
+    #     src = src + noise
+    return np.clip(src, 0, 1, dtype=np.float32)
 
 
 @dataclasses.dataclass
@@ -488,10 +497,10 @@ def PI2Str(pi):
 
 @dataclasses.dataclass
 class ModelEvaluation:
-    model: nn.Module
-    device: str
     dataset: labeldataset
-    calclose: typing.Callable
+    model: nn.Module = None
+    device: str = "cpu"
+    calcloss: typing.Callable = None
 
     @dataclasses.dataclass
     class InferenceResult:
@@ -509,32 +518,45 @@ class ModelEvaluation:
         else:
             return self.dataset.items[i]
 
+    def Inferencable(self):
+        return self.model is not None and self.calcloss is not None
+
     def Inference(self, src: torch.Tensor):
         return self.model.forward(src.unsqueeze(0).to(self.device))
 
     def Calcloss(self, pi: torch.Tensor, pihat: torch.Tensor):
-        return self.calclose(pi.unsqueeze(0).to(self.device), pihat).item()
+        return self.calcloss(pi.unsqueeze(0).to(self.device), pihat).item()
 
     def IterDataAndInference(self, iterWork: typing.Callable, num_draws):
         """
         iteration common method
         """
-        self.model.eval()
+        if self.Inferencable():
+            self.model.eval()
         with torch.no_grad():
             prog = Progress(num_draws)
             for i in range(num_draws):
                 while True:
                     src, lbl, pi = self.DrawData()
-                    tstart = time.perf_counter()
-                    pihat = self.Inference(src)
-                    tend = time.perf_counter()
-                    loss = self.Calcloss(pi, pihat)
+                    if self.Inferencable():
+                        tstart = time.perf_counter()
+                        pihat = self.Inference(src)
+                        tend = time.perf_counter()
+                        timeConsumption = tend - tstart
+                        loss = self.Calcloss(pi, pihat)
+                    else:
+                        pihat, timeConsumption, loss = [None] * 3
                     ret = iterWork(
                         ModelEvaluation.InferenceResult(
-                            src, lbl, pi, pihat, loss, tend - tstart
+                            src=src,
+                            lbl=lbl,
+                            pi=pi,
+                            pihat=pihat,
+                            loss=loss,
+                            timeConsumption=timeConsumption,
                         )
                     )
-                    # not specicified to be False
+                    # break on not specicified to be False
                     if ret != False:
                         break
                 prog.update(i)
@@ -611,9 +633,29 @@ def savemodel(model: nn.Module, path):
 
 
 def DatasetBenchmark(dataset: labeldataset):
-    ps = perf_statistic(True)
     sampleNum = 8192
+    prog = Progress(sampleNum)
+    ps = perf_statistic(True)
     for i in range(sampleNum):
         dataset[0]
+        prog.update(i)
     ps.stop()
+    prog.setFinish()
     print(f"draw {sampleNum} samples in {ps.time()}s, {sampleNum/ps.time()}it/s")
+
+
+def getmodel(model0: torch.nn.Module, modelpath, device):
+    model = setModule(model0, path=modelpath, device=device)
+    paramNum = np.sum(
+        [p.numel() for n, p in model.named_parameters() if p.requires_grad]
+    )
+    print(f"{paramNum=}")
+    # print(model)
+    return model
+
+
+def getDevice():
+    print(getDeviceInfo())
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"Using {device} device")
+    return device

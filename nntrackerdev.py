@@ -41,14 +41,13 @@ model = getmodel(
             # "features.9",
             # "features.10",
             # "features.11",
-            # "features.12",
+            "features.12",
             "features.13",
             "features.14",
             "features.15",
             "features.16",
         ),
         dropout=0.5,
-        # path16=False,
     ),
     modelpath,
     device,
@@ -105,7 +104,7 @@ print("load finished")
 
 # %%
 # dataloader
-batch_size = 1
+batch_size = 2
 num_workers = 0
 train_dataloader = DataLoader(
     train_data, batch_size=batch_size, num_workers=num_workers
@@ -117,7 +116,7 @@ test_dataloader = DataLoader(test_data, batch_size=32, num_workers=num_workers)
 # lossFunc
 
 
-def calclose(pi, pihat):
+def calcloss(pi, pihat):
     (
         isObj,
         meanX,
@@ -154,7 +153,7 @@ def trainmainprogress(batch, datatuple):
     model.train()
     src, lbl, pi = datatuple
     pihat = model.forward(src.to(device))
-    loss = calclose(pi.to(device), pihat)
+    loss = calcloss(pi.to(device), pihat)
     return loss
 
 
@@ -166,7 +165,7 @@ def onoutput(batch, aveerr):
         numTotal = 0
         for src, lbl, pi in test_dataloader:
             pihat = model.forward(src.to(device))
-            lossTotal += calclose(pi.to(device), pihat).item()
+            lossTotal += calcloss(pi.to(device), pihat).item()
             numTotal += batchsizeof(src)
             break
     print(f"testaveerr: {lossTotal/numTotal}")
@@ -194,7 +193,12 @@ savemodel(model, modelpath)
 
 # %%
 # view effect
-ModelEvaluation(model, device, train_data, calclose).viewmodel()
+ModelEvaluation(
+    model=model,
+    device=device,
+    dataset=train_data,
+    calcloss=calcloss,
+).draw_data_inference()
 
 
 # %%

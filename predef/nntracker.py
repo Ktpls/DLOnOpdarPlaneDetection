@@ -1,5 +1,6 @@
 # %%
 # basics
+from typing import Any
 from .nntrackerdev_predef import *
 
 
@@ -98,48 +99,54 @@ class GlobalAvePooling(nn.Module):
         return GlobalAvePooling.static_forward(x)
 
 
+class ConvBnHs(nn.Module):
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size,
+        stride=1,
+        padding="same",
+        ifBn=True,
+    ):
+        super().__init__()
+        self.conv = nn.Conv2d(
+            in_channels, out_channels, kernel_size, stride=stride, padding=padding
+        )
+        self.bn = nn.BatchNorm2d(out_channels) if ifBn else None
+        self.ifBn = ifBn
+        self.hs = nn.Hardswish()
+
+    def forward(self, x):
+        x = self.conv(x)
+        if self.bn is not None:
+            x = self.bn(x)
+        x = self.hs(x)
+        return x
+
+
 class ELAN(nn.Module):
     def __init__(self, in_channels, out_channels):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         assert out_channels % 2 == 0
-        self.outHalf = out_channels // 2
-        self.wayComplex = nn.Sequential(
-            nn.Sequential(
-                nn.Conv2d(in_channels, out_channels, 3, padding="same"),
-                nn.BatchNorm2d(out_channels),
-                nn.Hardswish(),
-            ),
-            nn.Sequential(
-                nn.Conv2d(out_channels, out_channels, 3, padding="same"),
-                nn.BatchNorm2d(out_channels),
-                nn.Hardswish(),
-                nn.Conv2d(out_channels, out_channels, 3, padding="same"),
-                nn.BatchNorm2d(out_channels),
-                nn.Hardswish(),
-            ),
-            nn.Sequential(
-                nn.Conv2d(out_channels, out_channels, 3, padding="same"),
-                nn.BatchNorm2d(out_channels),
-                nn.Hardswish(),
-                nn.Conv2d(out_channels, out_channels, 3, padding="same"),
-                nn.BatchNorm2d(out_channels),
-                nn.Hardswish(),
-            ),
+        outHalf = out_channels // 2
+        self.wayComplex = nn.ModuleList(
+            [
+                ConvBnHs(in_channels, outHalf, 3),
+                nn.Sequential(
+                    ConvBnHs(outHalf, outHalf, 3),
+                    ConvBnHs(outHalf, outHalf, 3),
+                ),
+                nn.Sequential(
+                    ConvBnHs(outHalf, outHalf, 3),
+                    ConvBnHs(outHalf, outHalf, 3),
+                ),
+            ]
         )
-        self.waySimple = (
-            nn.Sequential(
-                nn.Conv2d(in_channels, out_channels, 3, padding="same"),
-                nn.BatchNorm2d(out_channels),
-                nn.Hardswish(),
-            ),
-        )
-        self.combiner = nn.Sequential(
-            nn.Conv2d(out_channels * 2, out_channels, 1),
-            nn.BatchNorm2d(out_channels),
-            nn.Hardswish(),
-        )
+        self.waySimple = ConvBnHs(in_channels, outHalf, 3)
+        self.combiner = ConvBnHs(out_channels * 2, out_channels, 1)
 
     def forward(self, x):
         o_simp = self.waySimple(x)
@@ -149,10 +156,10 @@ class ELAN(nn.Module):
         return self.combiner(
             torch.concat(
                 [
-                    o_simp[: self.outHalf],
-                    o_comp0[: self.outHalf],
-                    o_comp1[: self.outHalf],
-                    o_comp2[: self.outHalf],
+                    o_simp,
+                    o_comp0,
+                    o_comp1,
+                    o_comp2,
                 ],
                 dim=1,
             )
@@ -165,47 +172,17 @@ class ELAN_H(nn.Module):
         self.in_channels = in_channels
         self.out_channels = out_channels
         assert out_channels % 4 == 0
-        self.outHalf = out_channels // 2
-        self.outQuad = out_channels // 4
-        self.wayComplex = nn.Sequential(
-            nn.Sequential(
-                nn.Conv2d(in_channels, self.outHalf, 3, padding="same"),
-                nn.BatchNorm2d(self.outHalf),
-                nn.Hardswish(),
-            ),
-            nn.Sequential(
-                nn.Conv2d(self.outHalf, self.outQuad, 3, padding="same"),
-                nn.BatchNorm2d(self.outQuad),
-                nn.Hardswish(),
-            ),
-            nn.Sequential(
-                nn.Conv2d(self.outQuad, self.outQuad, 3, padding="same"),
-                nn.BatchNorm2d(self.outQuad),
-                nn.Hardswish(),
-            ),
-            nn.Sequential(
-                nn.Conv2d(self.outQuad, self.outQuad, 3, padding="same"),
-                nn.BatchNorm2d(self.outQuad),
-                nn.Hardswish(),
-            ),
-            nn.Sequential(
-                nn.Conv2d(self.outQuad, self.outQuad, 3, padding="same"),
-                nn.BatchNorm2d(self.outQuad),
-                nn.Hardswish(),
-            ),
+        outHalf = out_channels // 2
+        outQuad = out_channels // 4
+        self.wayComplex = nn.ModuleList(
+            ConvBnHs(in_channels, outHalf, 3),
+            ConvBnHs(outHalf, outQuad, 3),
+            ConvBnHs(outQuad, outQuad, 3),
+            ConvBnHs(outQuad, outQuad, 3),
+            ConvBnHs(outQuad, outQuad, 3),
         )
-        self.waySimple = (
-            nn.Sequential(
-                nn.Conv2d(in_channels, out_channels, 3, padding="same"),
-                nn.BatchNorm2d(out_channels),
-                nn.Hardswish(),
-            ),
-        )
-        self.combiner = nn.Sequential(
-            nn.Conv2d(out_channels * 2, out_channels, 1),
-            nn.BatchNorm2d(out_channels),
-            nn.Hardswish(),
-        )
+        self.waySimple = ConvBnHs(in_channels, outHalf, 3)
+        self.combiner = ConvBnHs(out_channels * 2, out_channels, 1)
 
     def forward(self, x):
         o_simp = self.waySimple(x)
@@ -234,35 +211,22 @@ class MPn(nn.Module):
         super().__init__()
         self.in_channels = in_channels
         assert in_channels % 2 == 0
-        cHalf = in_channels // 2
-        self.cHalf = cHalf
         out_channels = n_value * in_channels
+        cPath = out_channels // 2
         self.out_channels = out_channels
         self.wayPooling = nn.Sequential(
             nn.MaxPool2d(downSamplingStride, downSamplingStride),
-            nn.Conv2d(cHalf, cHalf, 3, padding="same"),
-            nn.BatchNorm2d(cHalf),
-            nn.Hardswish(),
+            ConvBnHs(in_channels, cPath, 3),
         )
         self.wayConv = nn.Sequential(
-            nn.Conv2d(
-                cHalf, cHalf, downSamplingStride, stride=downSamplingStride, padding=0
-            ),
-            nn.BatchNorm2d(cHalf),
-            nn.Hardswish(),
-            nn.Conv2d(cHalf, cHalf, 3, padding="same"),
-            nn.BatchNorm2d(cHalf),
-            nn.Hardswish(),
+            ConvBnHs(in_channels, cPath, 3, stride=2, padding=0),
+            ConvBnHs(cPath, cPath, 3),
         )
-        self.combiner = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, 1),
-            nn.BatchNorm2d(out_channels),
-            nn.Hardswish(),
-        )
+        self.combiner = ConvBnHs(cPath * 2, out_channels, 3)
 
     def forward(self, x):
-        o_pool = self.wayPooling(x[:, : self.cHalf])
-        o_conv = self.wayConv(x[:, self.cHalf :])
+        o_pool = self.wayPooling(x)
+        o_conv = self.wayConv(x)
         return self.combiner(torch.concat([o_pool, o_conv], dim=1))
 
 
@@ -273,6 +237,18 @@ class FinalModule(torch.nn.Module):
         return filter(
             lambda x: x.requires_grad is not False, super().parameters(recurse)
         )
+
+
+class PRNAddition:
+    def __init__(self, rho) -> None:
+        self.rho = rho
+
+    def __call__(self, before: torch.Tensor, after: torch.Tensor) -> Any:
+        chan = int(self.rho * min(before.shape[1], after.shape[1]))
+        before = before[:, :chan]
+
+    def staticMethod(self):
+        return functools.partial(self.__call__, self=self)
 
 
 class nntracker_respi(FinalModule):
@@ -296,71 +272,37 @@ class nntracker_respi(FinalModule):
         chanProc4Simplified = 160
         self.upsampler = nn.Upsample(scale_factor=2, mode="bilinear")
 
-        self.chan4Simplifier = nn.Sequential(
-            nn.Conv2d(chanProc4, chanProc4Simplified, 1, stride=1, padding="same"),
-            nn.BatchNorm2d(chanProc4Simplified),
-            nn.Hardswish(),
-        )
+        self.chan4Simplifier = ConvBnHs(chanProc4, chanProc4Simplified, 1)
 
-        self.summing4And8 = nn.Sequential(
-            nn.Conv2d(
-                chanProc8 + chanProc4Simplified, chanProc8, 3, stride=1, padding="same"
-            ),
-            nn.BatchNorm2d(chanProc8),
-            nn.Hardswish(),
-        )
+        self.summing4And8 = ConvBnHs(chanProc8 + chanProc4Simplified, chanProc8, 3)
 
-        self.proc16 = nn.Sequential(
-            nn.Conv2d(chanProc16 + chanProc8, chanProc16, 3, stride=1, padding="same"),
-            nn.BatchNorm2d(chanProc16),
-            nn.Hardswish(),
-        )
+        self.proc16 = ConvBnHs(chanProc16 + chanProc8, chanProc16, 3)
 
         self.down16to8 = nn.Sequential(
-            nn.Conv2d(chanProc16, chanProc16, 3, stride=1, padding="same"),
-            nn.BatchNorm2d(chanProc16),
-            nn.Hardswish(),
+            ConvBnHs(chanProc16, chanProc16, 3),
             nn.MaxPool2d(kernel_size=2, stride=2),
         )
 
         self.proc8 = nn.Sequential(
-            nn.Conv2d(chanProc16 + chanProc8, chanProc8, 3, stride=1, padding="same"),
-            nn.BatchNorm2d(chanProc8),
-            nn.Hardswish(),
-            nn.Conv2d(chanProc8, chanProc8, 3, stride=1, padding="same"),
-            nn.BatchNorm2d(chanProc8),
-            nn.Hardswish(),
+            ConvBnHs(chanProc16 + chanProc8, chanProc8, 3),
+            ConvBnHs(chanProc8, chanProc8, 3),
         )
 
         self.down8to4 = nn.Sequential(
-            nn.Conv2d(chanProc8, chanProc8, 3, stride=1, padding="same"),
-            nn.BatchNorm2d(chanProc8),
-            nn.Hardswish(),
+            ConvBnHs(chanProc8, chanProc8, 3),
             nn.MaxPool2d(kernel_size=2, stride=2),
         )
 
         self.proc4 = nn.Sequential(
-            nn.Conv2d(
-                chanProc8 + chanProc4Simplified,
-                chanProc4Simplified,
-                3,
-                stride=1,
-                padding="same",
-            ),
-            nn.BatchNorm2d(chanProc4Simplified),
-            nn.Hardswish(),
-            nn.Conv2d(
-                chanProc4Simplified, chanProc4Simplified, 3, stride=1, padding="same"
-            ),
-            nn.BatchNorm2d(chanProc4Simplified),
-            nn.Hardswish(),
+            ConvBnHs(chanProc8 + chanProc4Simplified, chanProc4Simplified, 3),
+            ConvBnHs(chanProc4Simplified, chanProc4Simplified, 3),
         )
 
         last_channel = 1280 // 2
 
         self.discriminatorFinal = nn.Sequential(
             nn.Linear(chanProc4Simplified + chanProc8 + chanProc16, last_channel),
-            nn.Hardswish(inplace=True),
+            nn.Hardswish(),
             nn.Dropout(dropout),
             nn.Linear(last_channel, 4),
         )
@@ -395,20 +337,3 @@ class nntracker_respi(FinalModule):
         )
         x = self.discriminatorFinal(x)
         return x
-
-
-def getmodel(model0: torch.nn.Module, modelpath, device):
-    model = setModule(model0, path=modelpath, device=device)
-    paramNum = np.sum(
-        [p.numel() for n, p in model.named_parameters() if p.requires_grad]
-    )
-    print(f"{paramNum=}")
-    # print(model)
-    return model
-
-
-def getDevice():
-    print(getDeviceInfo())
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"Using {device} device")
-    return device

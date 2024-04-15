@@ -1,5 +1,6 @@
 # %%
 from predef.nntrackerdev_predef import *
+from utilitypack.util_torch import *
 
 # %%
 # copied from nntrackerdev.py
@@ -28,9 +29,9 @@ train_data = labeldataset().init(
     None,
     stdShape,
     augSteps=[
-        labeldataset.AugSteps.affine,
-        labeldataset.AugSteps.randLine,
-        labeldataset.AugSteps.autoaug,
+        #     labeldataset.AugSteps.affine,
+        #     labeldataset.AugSteps.randLine,
+        # labeldataset.AugSteps.autoaug,
         labeldataset.AugSteps.gausNoise,
     ],
 )
@@ -38,9 +39,6 @@ print("load finished")
 
 
 # %%
-def NewAxis():
-    fig, ax = plt.subplots()
-    return ax
 
 
 def surfaceWingspanCoefFind(dataset: labeldataset):
@@ -56,7 +54,7 @@ def surfaceWingspanCoefFind(dataset: labeldataset):
         coef = wingspan**2 / surf
         if coef > 20:
             print(item.name, coef, wingspan, surf)
-            NewAxis().imshow(item.lbl)
+            NewPyPlotAxis().imshow(item.lbl)
         Surf.append(surf)
         Wingspan.append(wingspan)
         prog.update(i)
@@ -64,8 +62,83 @@ def surfaceWingspanCoefFind(dataset: labeldataset):
     Surf = np.array(Surf)
     Wingspan = np.array(Wingspan)
     ws_surf_coef = (Wingspan**2) / Surf
-    NewAxis().scatter(Surf, ws_surf_coef)
+    NewPyPlotAxis().scatter(Surf, ws_surf_coef)
 
 
 surfaceWingspanCoefFind(train_data)
+
+# %%
+
+
+def checkAutoAugGood(dataset: labeldataset):
+    """
+    equalizer 1.0 None
+    contrast 1.0 8
+    """
+
+    def myForward(
+        self: torchvision.transforms.autoaugment.AutoAugment, img: torch.Tensor
+    ) -> torch.Tensor:
+        img = (img * 255).to(dtype=torch.uint8)
+        """
+            img (PIL Image or Tensor): Image to be transformed.
+
+        Returns:
+            PIL Image or Tensor: AutoAugmented image.
+        """
+        fill = self.fill
+        channels, height, width = TTF.get_dimensions(img)
+        if isinstance(img, torch.Tensor):
+            if isinstance(fill, (int, float)):
+                fill = [float(fill)] * channels
+            elif fill is not None:
+                fill = [float(f) for f in fill]
+
+        transform_id, probs, signs = self.get_params(len(self.policies))
+
+        op_meta = self._augmentation_space(10, (height, width))
+        policies = self.policies[transform_id]
+        for i, (op_name, p, magnitude_id) in enumerate(self.policies[transform_id]):
+            if probs[i] <= p:
+                magnitudes, signed = op_meta[op_name]
+                magnitude = (
+                    float(magnitudes[magnitude_id].item())
+                    if magnitude_id is not None
+                    else 0.0
+                )
+                if signed and signs[i] == 0:
+                    magnitude *= -1.0
+                img = torchvision.transforms.autoaugment._apply_op(
+                    img, op_name, magnitude, interpolation=self.interpolation, fill=fill
+                )
+
+        img = img.to(dtype=torch.float32) / 255
+        return img, policies
+
+    mppshape = np.array([6, 6])
+    mpp = MassivePicturePlot(mppshape)
+    numDesired = np.prod(mppshape) // 2
+    prog = Progress(numDesired)
+
+    for i in range(numDesired):
+        item = dataset.items[dataset.rndIndex()]
+        spl = item.spl
+        spl = cv.cvtColor(spl, cv.COLOR_BGR2RGB)
+        spl0 = spl * 0.5 + np.expand_dims(tensorimg2ndarray(item.lbl), -1) * 0.5
+        spl = dataset.totensor(spl)
+        spl, policies = myForward(dataset.augger, spl)
+        p0, p1 = policies
+        spl = tensorimg2ndarray(spl)
+        mpp.toNextPlot()
+        plt.title(p0)
+        plt.imshow(spl0)
+        prog.update(i)
+        mpp.toNextPlot()
+        plt.title(p1)
+        plt.imshow(spl)
+    prog.setFinish()
+
+
+checkAutoAugGood(train_data)
+
 # %%
