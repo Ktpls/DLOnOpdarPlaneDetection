@@ -72,7 +72,7 @@ class AddPositionalEmbedding(nn.Module):
                 dtype=torch.float32,
                 requires_grad=False,
             )
-        )
+        ).requires_grad_(False)
 
     def forward(self, x):
         return x + self.pe
@@ -123,6 +123,16 @@ class ConvBnHs(nn.Module):
             x = self.bn(x)
         x = self.hs(x)
         return x
+
+
+class PartialChannel(nn.Module):
+    def __init__(self, idx: typing.Union[int, slice]) -> None:
+        super().__init__()
+        self.idx = idx
+        torch.Tensor.__getitem__
+
+    def forward(self, x):
+        return x[:, self.idx, :, :]
 
 
 class ELAN(nn.Module):
@@ -207,7 +217,7 @@ class ELAN_H(nn.Module):
 
 
 class MPn(nn.Module):
-    def __init__(self, in_channels, n_value, downSamplingStride=2):
+    def __init__(self, in_channels, n_value=1, downSamplingStride=2):
         super().__init__()
         self.in_channels = in_channels
         assert in_channels % 2 == 0
@@ -219,7 +229,7 @@ class MPn(nn.Module):
             ConvBnHs(in_channels, cPath, 3),
         )
         self.wayConv = nn.Sequential(
-            ConvBnHs(in_channels, cPath, 3, stride=2, padding=0),
+            ConvBnHs(in_channels, cPath, downSamplingStride, stride=downSamplingStride, padding=0),
             ConvBnHs(cPath, cPath, 3),
         )
         self.combiner = ConvBnHs(cPath * 2, out_channels, 3)
@@ -270,7 +280,7 @@ class nntracker_respi(FinalModule):
         chanProc8 = 112
         chanProc4 = 960
         chanProc4Simplified = 160
-        self.upsampler = nn.Upsample(scale_factor=2, mode="bilinear")
+        self.upsampler = nn.Upsample(scale_factor=2, mode="nearest")
 
         self.chan4Simplifier = ConvBnHs(chanProc4, chanProc4Simplified, 1)
 
@@ -280,7 +290,7 @@ class nntracker_respi(FinalModule):
 
         self.down16to8 = nn.Sequential(
             ConvBnHs(chanProc16, chanProc16, 3),
-            nn.MaxPool2d(kernel_size=2, stride=2),
+            MPn(chanProc16),
         )
 
         self.proc8 = nn.Sequential(
@@ -290,7 +300,7 @@ class nntracker_respi(FinalModule):
 
         self.down8to4 = nn.Sequential(
             ConvBnHs(chanProc8, chanProc8, 3),
-            nn.MaxPool2d(kernel_size=2, stride=2),
+            MPn(chanProc8),
         )
 
         self.proc4 = nn.Sequential(
