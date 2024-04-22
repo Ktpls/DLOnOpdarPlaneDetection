@@ -562,7 +562,7 @@ class ModelEvaluation:
                 prog.update(i)
             prog.setFinish()
 
-    def draw_data_inference(self, num_draws=100):
+    def lossDistribution(self, num_draws=100):
         loss_values = []
         self.IterDataAndInference(
             lambda result: loss_values.append(result.loss),

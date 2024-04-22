@@ -38,14 +38,14 @@ model = getmodel(
             # "features.6",
             # "features.7",
             # "features.8",
-            # "features.9",
-            # "features.10",
-            # "features.11",
+            "features.9",
+            "features.10",
+            "features.11",
             "features.12",
-            "features.13",
-            "features.14",
-            "features.15",
-            "features.16",
+            # "features.13",
+            # "features.14",
+            # "features.15",
+            # "features.16",
         ),
         dropout=0.5,
     ),
@@ -198,7 +198,7 @@ ModelEvaluation(
     device=device,
     dataset=train_data,
     calcloss=calcloss,
-).viewmodel()
+).lossDistribution()
 
 
 # %%
