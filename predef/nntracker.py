@@ -99,6 +99,37 @@ class GlobalAvePooling(nn.Module):
         return GlobalAvePooling.static_forward(x)
 
 
+class SpatialPositioning(nn.Module):
+    def __init__(self, shape):
+        super().__init__()
+        h, w = shape
+        self.weightX = nn.Parameter(
+            torch.linspace(
+                0,
+                1,
+                w,
+                dtype=torch.float32,
+                requires_grad=False,
+            ).reshape([1, 1, -1, 1])
+        ).requires_grad_(False)
+        self.weightY = nn.Parameter(
+            torch.linspace(
+                0,
+                1,
+                h,
+                dtype=torch.float32,
+                requires_grad=False,
+            ).reshape([1, -1, 1, 1])
+        ).requires_grad_(False)
+
+    def forward(self, x):
+        x = torch.softmax(x, dim=[-3, -2])
+        X = torch.sum(self.weightX * x, dim=-2)
+        Y = torch.sum(self.weightY * x, dim=-3)
+        x = torch.concat([X, Y], dim=-1)
+        return x
+
+
 class ConvBnHs(nn.Module):
     def __init__(
         self,
@@ -229,7 +260,13 @@ class MPn(nn.Module):
             ConvBnHs(in_channels, cPath, 3),
         )
         self.wayConv = nn.Sequential(
-            ConvBnHs(in_channels, cPath, downSamplingStride, stride=downSamplingStride, padding=0),
+            ConvBnHs(
+                in_channels,
+                cPath,
+                downSamplingStride,
+                stride=downSamplingStride,
+                padding=0,
+            ),
             ConvBnHs(cPath, cPath, 3),
         )
         self.combiner = ConvBnHs(cPath * 2, out_channels, 3)
@@ -290,7 +327,8 @@ class nntracker_respi(FinalModule):
 
         self.down16to8 = nn.Sequential(
             ConvBnHs(chanProc16, chanProc16, 3),
-            MPn(chanProc16),
+            nn.MaxPool2d(2, 2),
+            # MPn(chanProc16),
         )
 
         self.proc8 = nn.Sequential(
@@ -300,13 +338,18 @@ class nntracker_respi(FinalModule):
 
         self.down8to4 = nn.Sequential(
             ConvBnHs(chanProc8, chanProc8, 3),
-            MPn(chanProc8),
+            nn.MaxPool2d(2, 2),
+            # MPn(chanProc8),
         )
 
         self.proc4 = nn.Sequential(
             ConvBnHs(chanProc8 + chanProc4Simplified, chanProc4Simplified, 3),
             ConvBnHs(chanProc4Simplified, chanProc4Simplified, 3),
         )
+
+        self.locator16 = SpatialPositioning([16, 16])
+        self.locator8 = SpatialPositioning([8, 8])
+        self.locator4 = SpatialPositioning([4, 4])
 
         last_channel = 1280 // 2
 
@@ -342,7 +385,11 @@ class nntracker_respi(FinalModule):
 
         pathes = [sum4, sum8, sum16]
         x = torch.concat(
-            [torch.flatten(self.backbone.avgpool(o), 1) for o in pathes],
+            [
+                self.locator4(sum4),
+                self.locator8(sum8),
+                self.locator16(sum16),
+            ],
             dim=1,
         )
         x = self.discriminatorFinal(x)

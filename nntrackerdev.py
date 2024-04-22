@@ -149,7 +149,7 @@ def calcloss(pi, pihat):
 # train
 
 
-def trainmainprogress(batch, datatuple):
+def trainmainprogress(datatuple):
     model.train()
     src, lbl, pi = datatuple
     pihat = model.forward(src.to(device))
