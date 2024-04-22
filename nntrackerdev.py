@@ -198,7 +198,7 @@ ModelEvaluation(
     device=device,
     dataset=train_data,
     calcloss=calcloss,
-).draw_data_inference()
+).viewmodel()
 
 
 # %%

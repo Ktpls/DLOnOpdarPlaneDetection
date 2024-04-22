@@ -300,6 +300,21 @@ class PRNAddition:
 
 
 class nntracker_respi(FinalModule):
+    # mobile net v3 large
+    # EXPORT_x16=6
+    # EXPORT_x8=12
+    # EXPORT_x4=15
+    # chanProc16 = 40
+    # chanProc8 = 112
+    # chanProc4 = 160
+    # mobile net v3 small
+    EXPORT_x16 = 3
+    EXPORT_x8 = 8
+    EXPORT_x4 = 11
+    chanProc16 = 24
+    chanProc8 = 48
+    chanProc4 = 96
+
     def __init__(
         self,
         freeLayers=list(),
@@ -307,44 +322,57 @@ class nntracker_respi(FinalModule):
         dropout=0.2,
     ):
         super().__init__()
-        weights = torchvision.models.MobileNet_V3_Large_Weights.DEFAULT
-        backbone = torchvision.models.mobilenet_v3_large(
+        weights = torchvision.models.MobileNet_V3_Small_Weights.DEFAULT
+        backbone = torchvision.models.mobilenet_v3_small(
             weights=weights if loadPretrainedBackbone else None
         )
         self.backbone = backbone
         self.setBackboneFree(freeLayers)
         self.backbonepreproc = weights.transforms(antialias=True)
-        chanProc16 = 40
-        chanProc8 = 112
-        chanProc4 = 960
         chanProc4Simplified = 160
         self.upsampler = nn.Upsample(scale_factor=2, mode="nearest")
 
-        self.chan4Simplifier = ConvBnHs(chanProc4, chanProc4Simplified, 1)
+        self.chan4Simplifier = ConvBnHs(
+            nntracker_respi.chanProc4, chanProc4Simplified, 1
+        )
 
-        self.summing4And8 = ConvBnHs(chanProc8 + chanProc4Simplified, chanProc8, 3)
+        self.summing4And8 = ConvBnHs(
+            nntracker_respi.chanProc8 + chanProc4Simplified,
+            nntracker_respi.chanProc8,
+            3,
+        )
 
-        self.proc16 = ConvBnHs(chanProc16 + chanProc8, chanProc16, 3)
+        self.proc16 = ConvBnHs(
+            nntracker_respi.chanProc16 + nntracker_respi.chanProc8,
+            nntracker_respi.chanProc16,
+            3,
+        )
 
         self.down16to8 = nn.Sequential(
-            ConvBnHs(chanProc16, chanProc16, 3),
+            ConvBnHs(nntracker_respi.chanProc16, nntracker_respi.chanProc16, 3),
             nn.MaxPool2d(2, 2),
             # MPn(chanProc16),
         )
 
         self.proc8 = nn.Sequential(
-            ConvBnHs(chanProc16 + chanProc8, chanProc8, 3),
-            ConvBnHs(chanProc8, chanProc8, 3),
+            ConvBnHs(
+                nntracker_respi.chanProc16 + nntracker_respi.chanProc8,
+                nntracker_respi.chanProc8,
+                3,
+            ),
+            ConvBnHs(nntracker_respi.chanProc8, nntracker_respi.chanProc8, 3),
         )
 
         self.down8to4 = nn.Sequential(
-            ConvBnHs(chanProc8, chanProc8, 3),
+            ConvBnHs(nntracker_respi.chanProc8, nntracker_respi.chanProc8, 3),
             nn.MaxPool2d(2, 2),
             # MPn(chanProc8),
         )
 
         self.proc4 = nn.Sequential(
-            ConvBnHs(chanProc8 + chanProc4Simplified, chanProc4Simplified, 3),
+            ConvBnHs(
+                nntracker_respi.chanProc8 + chanProc4Simplified, chanProc4Simplified, 3
+            ),
             ConvBnHs(chanProc4Simplified, chanProc4Simplified, 3),
         )
 
@@ -355,7 +383,15 @@ class nntracker_respi(FinalModule):
         last_channel = 1280 // 2
 
         self.discriminatorFinal = nn.Sequential(
-            nn.Linear(2 * (chanProc4Simplified + chanProc8 + chanProc16), last_channel),
+            nn.Linear(
+                2
+                * (
+                    chanProc4Simplified
+                    + nntracker_respi.chanProc8
+                    + nntracker_respi.chanProc16
+                ),
+                last_channel,
+            ),
             nn.Hardswish(),
             nn.Dropout(dropout),
             nn.Linear(last_channel, 4),
@@ -371,11 +407,11 @@ class nntracker_respi(FinalModule):
     def forward(self, x):
         for i, module in enumerate(self.backbone.features):
             x = module(x)
-            if i == 6:
+            if i == nntracker_respi.EXPORT_x16:
                 out16 = x
-            elif i == 12:
+            elif i == nntracker_respi.EXPORT_x8:
                 out8 = x
-            elif i == 16:
+            elif i == nntracker_respi.EXPORT_x4:
                 out4 = x
                 break
         out4 = self.chan4Simplifier(out4)
@@ -384,7 +420,6 @@ class nntracker_respi(FinalModule):
         sum8 = self.proc8(torch.concat([summed, self.down16to8(sum16)], dim=1))
         sum4 = self.proc4(torch.concat([out4, self.down8to4(sum8)], dim=1))
 
-        pathes = [sum4, sum8, sum16]
         x = torch.concat(
             [
                 self.locator4(sum4),
