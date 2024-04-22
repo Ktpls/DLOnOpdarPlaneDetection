@@ -406,7 +406,7 @@ class trainpipe:
 
             # train
             for batch, datatuple in enumerate(dataloader):
-                loss = calcLossFoo(batch, datatuple)
+                loss = calcLossFoo(datatuple)
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
