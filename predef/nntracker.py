@@ -411,14 +411,6 @@ class nntracker_respi(FinalModule):
                     nn.Dropout(dropout),
                     nn.Hardswish(),
                 ),
-                nn.Sequential(
-                    nn.Linear(
-                        last_channel,
-                        last_channel,
-                    ),
-                    nn.Dropout(dropout),
-                    nn.Hardswish(),
-                ),
             ),
             nn.Linear(last_channel, 4),
         )
