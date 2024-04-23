@@ -422,6 +422,7 @@ class nntracker_respi(FinalModule):
 
 
 class nntracker_respi_spatialpositioning_head(nntracker_respi):
+    last_channel = nntracker_respi.chanProc4Simplified * 2
     def __init__(self, freeLayers=list(), loadPretrainedBackbone=True, dropout=0.5):
         super().__init__(freeLayers, loadPretrainedBackbone, dropout)
         self.locator16 = SpatialPositioning([16, 16])
@@ -478,7 +479,7 @@ class nntracker_respi_mnv3s(nntracker_respi):
     chanProc8 = 48
     chanProc4 = 96
     chanProc4Simplified = 160
-    last_channel = chanProc4Simplified * 2
+    last_channel = 1024 // 2
 
     def __init__(self, freeLayers=list(), loadPretrainedBackbone=True, dropout=0.2):
         super().__init__(freeLayers, loadPretrainedBackbone, dropout)
