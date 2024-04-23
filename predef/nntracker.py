@@ -430,12 +430,10 @@ class nntracker_respi_MPn(nntracker_respi):
         super().__init__(freeLayers, loadPretrainedBackbone, dropout)
 
         self.down16to8 = torch.nn.Sequential(
-            ConvBnHs(self.chanProc16, self.chanProc16, 3),
             MPn(self.chanProc16),
         )
 
         self.down8to4 = torch.nn.Sequential(
-            ConvBnHs(self.chanProc8, self.chanProc8, 3),
             MPn(self.chanProc8),
         )
 
