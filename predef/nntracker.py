@@ -301,143 +301,162 @@ class PRNAddition:
 
 class nntracker_respi(FinalModule):
     # mobile net v3 large
-    # EXPORT_x16=6
-    # EXPORT_x8=12
-    # EXPORT_x4=15
-    # chanProc16 = 40
-    # chanProc8 = 112
-    # chanProc4 = 160
-    # mobile net v3 small
-    EXPORT_x16 = 3
-    EXPORT_x8 = 8
-    EXPORT_x4 = 11
-    chanProc16 = 24
-    chanProc8 = 48
-    chanProc4 = 96
+    EXPORT_x16 = 6
+    EXPORT_x8 = 12
+    EXPORT_x4 = 15
+    chanProc16 = 40
+    chanProc8 = 112
+    chanProc4 = 160
+    chanProc4Simplified = 160
+    last_channel = 1280 // 2
 
     def __init__(
         self,
         freeLayers=list(),
         loadPretrainedBackbone=True,
-        dropout=0.2,
+        dropout=0.5,
     ):
         super().__init__()
-        weights = torchvision.models.MobileNet_V3_Small_Weights.DEFAULT
-        backbone = torchvision.models.mobilenet_v3_small(
+        weights = torchvision.models.MobileNet_V3_Large_Weights.DEFAULT
+        backbone = torchvision.models.mobilenet_v3_large(
             weights=weights if loadPretrainedBackbone else None
         )
-        self.backbone = backbone
-        self.setBackboneFree(freeLayers)
+        self.backbone = self.setBackboneFree(backbone, freeLayers)
         self.backbonepreproc = weights.transforms(antialias=True)
-        chanProc4Simplified = 160
         self.upsampler = nn.Upsample(scale_factor=2, mode="nearest")
 
-        self.chan4Simplifier = ConvBnHs(
-            nntracker_respi.chanProc4, chanProc4Simplified, 1
-        )
+        self.chan4Simplifier = ConvBnHs(self.chanProc4, self.chanProc4Simplified, 1)
 
         self.summing4And8 = ConvBnHs(
-            nntracker_respi.chanProc8 + chanProc4Simplified,
-            nntracker_respi.chanProc8,
+            self.chanProc8 + self.chanProc4Simplified,
+            self.chanProc8,
             3,
         )
 
         self.proc16 = ConvBnHs(
-            nntracker_respi.chanProc16 + nntracker_respi.chanProc8,
-            nntracker_respi.chanProc16,
+            self.chanProc16 + self.chanProc8,
+            self.chanProc16,
             3,
         )
 
         self.down16to8 = nn.Sequential(
-            ConvBnHs(nntracker_respi.chanProc16, nntracker_respi.chanProc16, 3),
+            ConvBnHs(self.chanProc16, self.chanProc16, 3),
             nn.MaxPool2d(2, 2),
             # MPn(chanProc16),
         )
 
         self.proc8 = nn.Sequential(
             ConvBnHs(
-                nntracker_respi.chanProc16 + nntracker_respi.chanProc8,
-                nntracker_respi.chanProc8,
+                self.chanProc16 + self.chanProc8,
+                self.chanProc8,
                 3,
             ),
-            ConvBnHs(nntracker_respi.chanProc8, nntracker_respi.chanProc8, 3),
+            ConvBnHs(self.chanProc8, self.chanProc8, 3),
         )
 
         self.down8to4 = nn.Sequential(
-            ConvBnHs(nntracker_respi.chanProc8, nntracker_respi.chanProc8, 3),
+            ConvBnHs(self.chanProc8, self.chanProc8, 3),
             nn.MaxPool2d(2, 2),
             # MPn(chanProc8),
         )
 
         self.proc4 = nn.Sequential(
             ConvBnHs(
-                nntracker_respi.chanProc8 + chanProc4Simplified, chanProc4Simplified, 3
+                self.chanProc8 + self.chanProc4Simplified, self.chanProc4Simplified, 3
             ),
-            ConvBnHs(chanProc4Simplified, chanProc4Simplified, 3),
+            ConvBnHs(self.chanProc4Simplified, self.chanProc4Simplified, 3),
         )
 
+        self.discriminatorFinal = nn.Sequential(
+            nn.Linear(
+                self.chanProc4Simplified + self.chanProc8 + self.chanProc16,
+                self.last_channel,
+            ),
+            nn.Hardswish(),
+            nn.Dropout(dropout),
+            nn.Linear(self.last_channel, 4),
+        )
+
+    def setBackboneFree(self, backbone: torch.nn.Module, freeLayers):
+        for name, param in backbone.named_parameters():
+            if any([name.startswith(fl) for fl in freeLayers]):
+                param.requires_grad = True
+            else:
+                param.requires_grad = False
+        return backbone
+
+    def fpnForward(self, x):
+        for i, module in enumerate(self.backbone.features):
+            x = module(x)
+            if i == self.EXPORT_x16:
+                out16 = x
+            elif i == self.EXPORT_x8:
+                out8 = x
+            elif i == self.EXPORT_x4:
+                out4 = x
+                break
+        out4 = self.chan4Simplifier(out4)
+        return out16, out8, out4
+
+    def neckForward(self, out16, out8, out4):
+        summed = self.summing4And8(torch.concat([out8, self.upsampler(out4)], dim=1))
+        sum16 = self.proc16(torch.concat([out16, self.upsampler(summed)], dim=1))
+        sum8 = self.proc8(torch.concat([summed, self.down16to8(sum16)], dim=1))
+        sum4 = self.proc4(torch.concat([out4, self.down8to4(sum8)], dim=1))
+        return sum16, sum8, sum4
+
+    def headForward(self, sum16, sum8, sum4):
+        pathes = [sum4, sum8, sum16]
+        x = torch.concat(
+            [torch.flatten(self.backbone.avgpool(o), 1) for o in pathes],
+            dim=1,
+        )
+        x = self.discriminatorFinal(x)
+        return x
+
+    def forward(self, x):
+        out16, out8, out4 = self.fpnForward(x)
+        sum16, sum8, sum4 = self.neckForward(out16, out8, out4)
+        x = self.headForward(sum16, sum8, sum4)
+        return x
+
+
+class nntracker_respi_spatialpositioning_head(nntracker_respi):
+    def __init__(self, freeLayers=list(), loadPretrainedBackbone=True, dropout=0.5):
+        super().__init__(freeLayers, loadPretrainedBackbone, dropout)
         self.locator16 = SpatialPositioning([16, 16])
         self.locator8 = SpatialPositioning([8, 8])
         self.locator4 = SpatialPositioning([4, 4])
 
-        last_channel = 1280 // 2
-
         self.discriminatorFinal = nn.Sequential(
             nn.Linear(
-                2
-                * (
-                    chanProc4Simplified
-                    + nntracker_respi.chanProc8
-                    + nntracker_respi.chanProc16
-                ),
-                last_channel,
+                2 * (self.chanProc4Simplified + self.chanProc8 + self.chanProc16),
+                self.last_channel,
             ),
             nn.Dropout(dropout),
             nn.Hardswish(),
             res_through(
                 nn.Sequential(
                     nn.Linear(
-                        last_channel,
-                        last_channel,
+                        self.last_channel,
+                        self.last_channel,
                     ),
                     nn.Dropout(dropout),
                     nn.Hardswish(),
                 ),
                 nn.Sequential(
                     nn.Linear(
-                        last_channel,
-                        last_channel,
+                        self.last_channel,
+                        self.last_channel,
                     ),
                     nn.Dropout(dropout),
                     nn.Hardswish(),
                 ),
             ),
-            nn.Linear(last_channel, 4),
+            nn.Linear(self.last_channel, 4),
         )
 
-    def setBackboneFree(self, freeLayers):
-        for name, param in self.backbone.named_parameters():
-            if any([name.startswith(fl) for fl in freeLayers]):
-                param.requires_grad = True
-            else:
-                param.requires_grad = False
-
-    def forward(self, x):
-        for i, module in enumerate(self.backbone.features):
-            x = module(x)
-            if i == nntracker_respi.EXPORT_x16:
-                out16 = x
-            elif i == nntracker_respi.EXPORT_x8:
-                out8 = x
-            elif i == nntracker_respi.EXPORT_x4:
-                out4 = x
-                break
-        out4 = self.chan4Simplifier(out4)
-        summed = self.summing4And8(torch.concat([out8, self.upsampler(out4)], dim=1))
-        sum16 = self.proc16(torch.concat([out16, self.upsampler(summed)], dim=1))
-        sum8 = self.proc8(torch.concat([summed, self.down16to8(sum16)], dim=1))
-        sum4 = self.proc4(torch.concat([out4, self.down8to4(sum8)], dim=1))
-
+    def headForward(self, sum16, sum8, sum4):
         x = torch.concat(
             [
                 self.locator4(sum4),
@@ -448,3 +467,24 @@ class nntracker_respi(FinalModule):
         )
         x = self.discriminatorFinal(x)
         return x
+
+
+class nntracker_respi_mnv3s(nntracker_respi):
+    # mobile net v3 small
+    EXPORT_x16 = 3
+    EXPORT_x8 = 8
+    EXPORT_x4 = 11
+    chanProc16 = 24
+    chanProc8 = 48
+    chanProc4 = 96
+    chanProc4Simplified = 160
+    last_channel = 1280 // 2
+
+    def __init__(self, freeLayers=list(), loadPretrainedBackbone=True, dropout=0.2):
+        super().__init__(freeLayers, loadPretrainedBackbone, dropout)
+        weights = torchvision.models.MobileNet_V3_Small_Weights.DEFAULT
+        backbone = torchvision.models.mobilenet_v3_small(
+            weights=weights if loadPretrainedBackbone else None
+        )
+        self.backbone = self.setBackboneFree(backbone, freeLayers)
+        self.backbonepreproc = weights.transforms(antialias=True)
