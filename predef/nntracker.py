@@ -252,29 +252,34 @@ class MPn(torch.nn.Module):
     def __init__(self, in_channels, n_value=1, downSamplingStride=2):
         super().__init__()
         self.in_channels = in_channels
+        self.n_value = n_value
         assert in_channels % 2 == 0
         out_channels = n_value * in_channels
         cPath = out_channels // 2
         self.out_channels = out_channels
+        self.splitWays = lambda x: (
+            (x[:, :cPath, :, :], x[:, cPath:, :, :])
+            if n_value == 1
+            else (x, x) if n_value == 2 else None
+        )
         self.wayPooling = torch.nn.Sequential(
             torch.nn.MaxPool2d(downSamplingStride, downSamplingStride),
-            ConvBnHs(in_channels, cPath, 3),
         )
         self.wayConv = torch.nn.Sequential(
             ConvBnHs(
-                in_channels,
+                cPath,
                 cPath,
                 downSamplingStride,
                 stride=downSamplingStride,
                 padding=0,
             ),
-            ConvBnHs(cPath, cPath, 3),
         )
         self.combiner = ConvBnHs(cPath * 2, out_channels, 3)
 
     def forward(self, x):
-        o_pool = self.wayPooling(x)
-        o_conv = self.wayConv(x)
+        x_pool, x_conv = self.splitWays(x)
+        o_pool = self.wayPooling(x_pool)
+        o_conv = self.wayConv(x_conv)
         return self.combiner(torch.concat([o_pool, o_conv], dim=1))
 
 
