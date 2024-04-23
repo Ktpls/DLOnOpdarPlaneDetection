@@ -478,7 +478,7 @@ class nntracker_respi_mnv3s(nntracker_respi):
     chanProc8 = 48
     chanProc4 = 96
     chanProc4Simplified = 160
-    last_channel = 1280 // 2
+    last_channel = chanProc4Simplified * 2
 
     def __init__(self, freeLayers=list(), loadPretrainedBackbone=True, dropout=0.2):
         super().__init__(freeLayers, loadPretrainedBackbone, dropout)
