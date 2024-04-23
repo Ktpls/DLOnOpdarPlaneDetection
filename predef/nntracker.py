@@ -436,7 +436,6 @@ class nntracker_respi_MPn(nntracker_respi):
 
         self.down8to4 = torch.nn.Sequential(
             ConvBnHs(self.chanProc8, self.chanProc8, 3),
-            torch.nn.MaxPool2d(2, 2),
             MPn(self.chanProc8),
         )
 
