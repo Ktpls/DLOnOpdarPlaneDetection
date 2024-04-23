@@ -36,7 +36,7 @@ device = getDevice()
 modelpath = r"nntracker.pth"
 model = getmodel(
     # nntracker_pi(),
-    nntracker_respi_spatialpositioning_head(
+    nntracker_respi_MPn(
         freeLayers=(
             # "features.0",
             # "features.1",
@@ -207,7 +207,7 @@ ModelEvaluation(
     device=device,
     dataset=train_data,
     calcloss=calcloss,
-).lossDistribution()
+).viewmodel()
 
 
 # %%

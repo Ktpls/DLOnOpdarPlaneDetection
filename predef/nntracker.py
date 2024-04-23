@@ -327,16 +327,20 @@ class nntracker_respi(FinalModule):
 
         self.chan4Simplifier = ConvBnHs(self.chanProc4, self.chanProc4Simplified, 1)
 
-        self.summing4And8 = ConvBnHs(
-            self.chanProc8 + self.chanProc4Simplified,
-            self.chanProc8,
-            3,
+        self.summing4And8 = torch.nn.Sequential(
+            ConvBnHs(
+                self.chanProc8 + self.chanProc4Simplified,
+                self.chanProc8,
+                3,
+            )
         )
 
-        self.proc16 = ConvBnHs(
-            self.chanProc16 + self.chanProc8,
-            self.chanProc16,
-            3,
+        self.proc16 = torch.nn.Sequential(
+            ConvBnHs(
+                self.chanProc16 + self.chanProc8,
+                self.chanProc16,
+                3,
+            )
         )
 
         self.down16to8 = torch.nn.Sequential(
@@ -421,8 +425,25 @@ class nntracker_respi(FinalModule):
         return x
 
 
+class nntracker_respi_MPn(nntracker_respi):
+    def __init__(self, freeLayers=list(), loadPretrainedBackbone=True, dropout=0.5):
+        super().__init__(freeLayers, loadPretrainedBackbone, dropout)
+
+        self.down16to8 = torch.nn.Sequential(
+            ConvBnHs(self.chanProc16, self.chanProc16, 3),
+            MPn(self.chanProc16),
+        )
+
+        self.down8to4 = torch.nn.Sequential(
+            ConvBnHs(self.chanProc8, self.chanProc8, 3),
+            torch.nn.MaxPool2d(2, 2),
+            MPn(self.chanProc8),
+        )
+
+
 class nntracker_respi_spatialpositioning_head(nntracker_respi):
     last_channel = nntracker_respi.chanProc4Simplified * 2
+
     def __init__(self, freeLayers=list(), loadPretrainedBackbone=True, dropout=0.5):
         super().__init__(freeLayers, loadPretrainedBackbone, dropout)
         self.locator16 = SpatialPositioning([16, 16])
