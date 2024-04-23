@@ -1,11 +1,18 @@
 """
-import os
-installPath=r'/kaggle/working/'
-projPath=os.path.join(installPath, 'DLOnOpdarPlaneDetection')
-if not os.path.exists(projPath):
-    !git clone https://github.com/Ktpls/DLOnOpdarPlaneDetection.git
-%cd {projPath}
-!git pull
+def installLib(installpath, gitpath):
+    import os
+
+    projPath = os.path.join(installpath, os.path.splitext(os.path.basename(gitpath))[0])
+    if not os.path.exists(projPath):
+        os.system(rf"git clone {gitpath} {projPath}")
+    else:
+        os.system(rf"cd {projPath}")
+        os.system(rf"git pull")
+installLib(r"/kaggle/working", "https://github.com/Ktpls/DLOnOpdarPlaneDetection.git")
+installLib(
+    r"/kaggle/working/DLOnOpdarPlaneDetection",
+    "https://github.com/Ktpls/pyinclude.git",
+)
 """
 
 # %%

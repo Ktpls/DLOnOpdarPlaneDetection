@@ -1,5 +1,9 @@
-from .utilkaggle import *
-
+from utilitypack.utility import *
+from utilitypack.util_torch import *
+import torchvision
+from torch import nn
+# (?<!torch\.)(?=nn\.) => torch.
+from torch.utils.data import DataLoader
 stdShape = [128, 128]
 import importlib
 import sys
@@ -498,7 +502,7 @@ def PI2Str(pi):
 @dataclasses.dataclass
 class ModelEvaluation:
     dataset: labeldataset
-    model: nn.Module = None
+    model: torch.nn.Module = None
     device: str = "cpu"
     calcloss: typing.Callable = None
 
@@ -627,7 +631,7 @@ class ModelEvaluation:
         print(f"average loss={totalLoss / samplenum}")
 
 
-def savemodel(model: nn.Module, path):
+def savemodel(model: torch.nn.Module, path):
     torch.save(model.state_dict(), path)
     print(f"Saved PyTorch Model State to {path}")
 

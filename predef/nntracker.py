@@ -44,17 +44,17 @@ class SemanticInjection(torch.nn.Module):
         self.globaldim = globaldim
         self.outdim = outdim
         super().__init__()
-        self.local = nn.Sequential(
-            nn.Conv2d(localdim, outdim, 1),
+        self.local = torch.nn.Sequential(
+            torch.nn.Conv2d(localdim, outdim, 1),
         )
-        self.global1 = nn.Sequential(
-            nn.Conv2d(globaldim, outdim, 1),
-            nn.Sigmoid(),
+        self.global1 = torch.nn.Sequential(
+            torch.nn.Conv2d(globaldim, outdim, 1),
+            torch.nn.Sigmoid(),
         )
-        self.global2 = nn.Sequential(
-            nn.Conv2d(globaldim, outdim, 1),
+        self.global2 = torch.nn.Sequential(
+            torch.nn.Conv2d(globaldim, outdim, 1),
         )
-        self.bn = nn.BatchNorm2d(outdim)
+        self.bn = torch.nn.BatchNorm2d(outdim)
 
     def forward(self, local, globalsemantic):
         x = self.local(local) * self.global1(globalsemantic) + self.global2(
@@ -63,10 +63,10 @@ class SemanticInjection(torch.nn.Module):
         return self.bn(x)
 
 
-class AddPositionalEmbedding(nn.Module):
+class AddPositionalEmbedding(torch.nn.Module):
     def __init__(self, shape, depth, len_max=None):
         super().__init__()
-        self.pe = nn.Parameter(
+        self.pe = torch.nn.Parameter(
             torch.tensor(
                 PositionalEmbedding2D(shape, depth, len_max),
                 dtype=torch.float32,
@@ -78,7 +78,7 @@ class AddPositionalEmbedding(nn.Module):
         return x + self.pe
 
 
-class PermuteModule(nn.Module):
+class PermuteModule(torch.nn.Module):
     def __init__(self, dims):
         super().__init__()
         self.dims = dims
@@ -87,7 +87,7 @@ class PermuteModule(nn.Module):
         return torch.permute(x, self.dims)
 
 
-class GlobalAvePooling(nn.Module):
+class GlobalAvePooling(torch.nn.Module):
     def __init__(self) -> None:
         super().__init__()
 
@@ -99,11 +99,11 @@ class GlobalAvePooling(nn.Module):
         return GlobalAvePooling.static_forward(x)
 
 
-class SpatialPositioning(nn.Module):
+class SpatialPositioning(torch.nn.Module):
     def __init__(self, shape):
         super().__init__()
         h, w = shape
-        self.weightX = nn.Parameter(
+        self.weightX = torch.nn.Parameter(
             torch.linspace(
                 0,
                 1,
@@ -112,7 +112,7 @@ class SpatialPositioning(nn.Module):
                 requires_grad=False,
             ).reshape([1, 1, 1, -1])
         ).requires_grad_(False)
-        self.weightY = nn.Parameter(
+        self.weightY = torch.nn.Parameter(
             torch.linspace(
                 0,
                 1,
@@ -131,7 +131,7 @@ class SpatialPositioning(nn.Module):
         return x
 
 
-class ConvBnHs(nn.Module):
+class ConvBnHs(torch.nn.Module):
     def __init__(
         self,
         in_channels,
@@ -142,12 +142,12 @@ class ConvBnHs(nn.Module):
         ifBn=True,
     ):
         super().__init__()
-        self.conv = nn.Conv2d(
+        self.conv = torch.nn.Conv2d(
             in_channels, out_channels, kernel_size, stride=stride, padding=padding
         )
-        self.bn = nn.BatchNorm2d(out_channels) if ifBn else None
+        self.bn = torch.nn.BatchNorm2d(out_channels) if ifBn else None
         self.ifBn = ifBn
-        self.hs = nn.Hardswish()
+        self.hs = torch.nn.Hardswish()
 
     def forward(self, x):
         x = self.conv(x)
@@ -157,7 +157,7 @@ class ConvBnHs(nn.Module):
         return x
 
 
-class PartialChannel(nn.Module):
+class PartialChannel(torch.nn.Module):
     def __init__(self, idx: typing.Union[int, slice]) -> None:
         super().__init__()
         self.idx = idx
@@ -167,21 +167,21 @@ class PartialChannel(nn.Module):
         return x[:, self.idx, :, :]
 
 
-class ELAN(nn.Module):
+class ELAN(torch.nn.Module):
     def __init__(self, in_channels, out_channels):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         assert out_channels % 2 == 0
         outHalf = out_channels // 2
-        self.wayComplex = nn.ModuleList(
+        self.wayComplex = torch.nn.ModuleList(
             [
                 ConvBnHs(in_channels, outHalf, 3),
-                nn.Sequential(
+                torch.nn.Sequential(
                     ConvBnHs(outHalf, outHalf, 3),
                     ConvBnHs(outHalf, outHalf, 3),
                 ),
-                nn.Sequential(
+                torch.nn.Sequential(
                     ConvBnHs(outHalf, outHalf, 3),
                     ConvBnHs(outHalf, outHalf, 3),
                 ),
@@ -208,7 +208,7 @@ class ELAN(nn.Module):
         )
 
 
-class ELAN_H(nn.Module):
+class ELAN_H(torch.nn.Module):
     def __init__(self, in_channels, out_channels):
         super().__init__()
         self.in_channels = in_channels
@@ -216,7 +216,7 @@ class ELAN_H(nn.Module):
         assert out_channels % 4 == 0
         outHalf = out_channels // 2
         outQuad = out_channels // 4
-        self.wayComplex = nn.ModuleList(
+        self.wayComplex = torch.nn.ModuleList(
             ConvBnHs(in_channels, outHalf, 3),
             ConvBnHs(outHalf, outQuad, 3),
             ConvBnHs(outQuad, outQuad, 3),
@@ -248,7 +248,7 @@ class ELAN_H(nn.Module):
         )
 
 
-class MPn(nn.Module):
+class MPn(torch.nn.Module):
     def __init__(self, in_channels, n_value=1, downSamplingStride=2):
         super().__init__()
         self.in_channels = in_channels
@@ -256,11 +256,11 @@ class MPn(nn.Module):
         out_channels = n_value * in_channels
         cPath = out_channels // 2
         self.out_channels = out_channels
-        self.wayPooling = nn.Sequential(
-            nn.MaxPool2d(downSamplingStride, downSamplingStride),
+        self.wayPooling = torch.nn.Sequential(
+            torch.nn.MaxPool2d(downSamplingStride, downSamplingStride),
             ConvBnHs(in_channels, cPath, 3),
         )
-        self.wayConv = nn.Sequential(
+        self.wayConv = torch.nn.Sequential(
             ConvBnHs(
                 in_channels,
                 cPath,
@@ -323,7 +323,7 @@ class nntracker_respi(FinalModule):
         )
         self.backbone = self.setBackboneFree(backbone, freeLayers)
         self.backbonepreproc = weights.transforms(antialias=True)
-        self.upsampler = nn.Upsample(scale_factor=2, mode="nearest")
+        self.upsampler = torch.nn.Upsample(scale_factor=2, mode="nearest")
 
         self.chan4Simplifier = ConvBnHs(self.chanProc4, self.chanProc4Simplified, 1)
 
@@ -339,13 +339,13 @@ class nntracker_respi(FinalModule):
             3,
         )
 
-        self.down16to8 = nn.Sequential(
+        self.down16to8 = torch.nn.Sequential(
             ConvBnHs(self.chanProc16, self.chanProc16, 3),
-            nn.MaxPool2d(2, 2),
+            torch.nn.MaxPool2d(2, 2),
             # MPn(chanProc16),
         )
 
-        self.proc8 = nn.Sequential(
+        self.proc8 = torch.nn.Sequential(
             ConvBnHs(
                 self.chanProc16 + self.chanProc8,
                 self.chanProc8,
@@ -354,27 +354,27 @@ class nntracker_respi(FinalModule):
             ConvBnHs(self.chanProc8, self.chanProc8, 3),
         )
 
-        self.down8to4 = nn.Sequential(
+        self.down8to4 = torch.nn.Sequential(
             ConvBnHs(self.chanProc8, self.chanProc8, 3),
-            nn.MaxPool2d(2, 2),
+            torch.nn.MaxPool2d(2, 2),
             # MPn(chanProc8),
         )
 
-        self.proc4 = nn.Sequential(
+        self.proc4 = torch.nn.Sequential(
             ConvBnHs(
                 self.chanProc8 + self.chanProc4Simplified, self.chanProc4Simplified, 3
             ),
             ConvBnHs(self.chanProc4Simplified, self.chanProc4Simplified, 3),
         )
 
-        self.discriminatorFinal = nn.Sequential(
-            nn.Linear(
+        self.discriminatorFinal = torch.nn.Sequential(
+            torch.nn.Linear(
                 self.chanProc4Simplified + self.chanProc8 + self.chanProc16,
                 self.last_channel,
             ),
-            nn.Hardswish(),
-            nn.Dropout(dropout),
-            nn.Linear(self.last_channel, 4),
+            torch.nn.Hardswish(),
+            torch.nn.Dropout(dropout),
+            torch.nn.Linear(self.last_channel, 4),
         )
 
     def setBackboneFree(self, backbone: torch.nn.Module, freeLayers):
@@ -428,32 +428,32 @@ class nntracker_respi_spatialpositioning_head(nntracker_respi):
         self.locator8 = SpatialPositioning([8, 8])
         self.locator4 = SpatialPositioning([4, 4])
 
-        self.discriminatorFinal = nn.Sequential(
-            nn.Linear(
+        self.discriminatorFinal = torch.nn.Sequential(
+            torch.nn.Linear(
                 2 * (self.chanProc4Simplified + self.chanProc8 + self.chanProc16),
                 self.last_channel,
             ),
-            nn.Dropout(dropout),
-            nn.Hardswish(),
+            torch.nn.Dropout(dropout),
+            torch.nn.Hardswish(),
             res_through(
-                nn.Sequential(
-                    nn.Linear(
+                torch.nn.Sequential(
+                    torch.nn.Linear(
                         self.last_channel,
                         self.last_channel,
                     ),
-                    nn.Dropout(dropout),
-                    nn.Hardswish(),
+                    torch.nn.Dropout(dropout),
+                    torch.nn.Hardswish(),
                 ),
-                nn.Sequential(
-                    nn.Linear(
+                torch.nn.Sequential(
+                    torch.nn.Linear(
                         self.last_channel,
                         self.last_channel,
                     ),
-                    nn.Dropout(dropout),
-                    nn.Hardswish(),
+                    torch.nn.Dropout(dropout),
+                    torch.nn.Hardswish(),
                 ),
             ),
-            nn.Linear(self.last_channel, 4),
+            torch.nn.Linear(self.last_channel, 4),
         )
 
     def headForward(self, sum16, sum8, sum4):
