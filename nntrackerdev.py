@@ -1,20 +1,22 @@
 """
+import os
+import sys
 def installLib(installpath, gitpath):
-    import os
-
     projPath = os.path.join(installpath, os.path.splitext(os.path.basename(gitpath))[0])
     if not os.path.exists(projPath):
         os.system(rf"git clone {gitpath} {projPath}")
     else:
-        os.system(rf"cd {projPath}")
+        %cd {projPath}
         os.system(rf"git pull")
+    if projPath not in sys.path:
+        sys.path.append(projPath)
 installLib(r"/kaggle/working", "https://github.com/Ktpls/DLOnOpdarPlaneDetection.git")
 installLib(
-    r"/kaggle/working/DLOnOpdarPlaneDetection",
+    r"/kaggle/working",
     "https://github.com/Ktpls/pyinclude.git",
 )
+#!rm "/kaggle/working/DLOnOpdarPlaneDetection/nntracker.pth"
 """
-
 # %%
 # basics
 from predef.nntrackerdev_predef import *
