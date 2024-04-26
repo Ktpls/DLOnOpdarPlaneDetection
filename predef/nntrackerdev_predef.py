@@ -661,10 +661,3 @@ def getmodel(model0: torch.nn.Module, modelpath, device):
     print(f"{paramNum=}")
     # print(model)
     return model
-
-
-def getDevice():
-    print(getDeviceInfo())
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"Using {device} device")
-    return device

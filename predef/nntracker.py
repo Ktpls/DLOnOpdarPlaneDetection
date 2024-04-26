@@ -254,8 +254,8 @@ class MPn(torch.nn.Module):
         self.in_channels = in_channels
         assert in_channels % 2 == 0
         out_channels = n_value * in_channels
-        cPath = out_channels // 2
         self.out_channels = out_channels
+        cPath = out_channels // 2
         self.wayPooling = torch.nn.Sequential(
             torch.nn.MaxPool2d(downSamplingStride, downSamplingStride),
             ConvBnHs(in_channels, cPath, 3),
@@ -435,6 +435,31 @@ class nntracker_respi_MPn(nntracker_respi):
 
         self.down8to4 = torch.nn.Sequential(
             MPn(self.chanProc8),
+        )
+
+
+class nntracker_respi_ELAN(nntracker_respi_MPn):
+    def __init__(self, freeLayers=list(), loadPretrainedBackbone=True, dropout=0.5):
+        super().__init__(freeLayers, loadPretrainedBackbone, dropout)
+
+        self.chan4Simplifier = ConvBnHs(self.chanProc4, self.chanProc4Simplified, 1)
+
+        self.summing4And8 = torch.nn.Sequential(
+            ELAN(self.chanProc8 + self.chanProc4Simplified, self.chanProc8)
+        )
+
+        self.proc16 = torch.nn.Sequential(
+            ELAN(self.chanProc16 + self.chanProc8, self.chanProc16)
+        )
+
+        self.proc8 = torch.nn.Sequential(
+            ELAN(self.chanProc16 + self.chanProc8, self.chanProc8),
+            ELAN(self.chanProc8, self.chanProc8),
+        )
+
+        self.proc4 = torch.nn.Sequential(
+            ELAN(self.chanProc8 + self.chanProc4Simplified, self.chanProc4Simplified),
+            ELAN(self.chanProc4Simplified, self.chanProc4Simplified),
         )
 
 
