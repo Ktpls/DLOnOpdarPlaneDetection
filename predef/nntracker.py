@@ -438,25 +438,19 @@ class nntracker_respi_MPn(nntracker_respi):
         )
 
 
-class nntracker_respi_ELAN(nntracker_respi_MPn):
+class nntracker_respi_ELAN(nntracker_respi):
     def __init__(self, freeLayers=list(), loadPretrainedBackbone=True, dropout=0.5):
         super().__init__(freeLayers, loadPretrainedBackbone, dropout)
-
-        self.chan4Simplifier = ConvBnHs(self.chanProc4, self.chanProc4Simplified, 1)
-
         self.summing4And8 = torch.nn.Sequential(
             ELAN(self.chanProc8 + self.chanProc4Simplified, self.chanProc8)
         )
-
         self.proc16 = torch.nn.Sequential(
             ELAN(self.chanProc16 + self.chanProc8, self.chanProc16)
         )
-
         self.proc8 = torch.nn.Sequential(
             ELAN(self.chanProc16 + self.chanProc8, self.chanProc8),
             ELAN(self.chanProc8, self.chanProc8),
         )
-
         self.proc4 = torch.nn.Sequential(
             ELAN(self.chanProc8 + self.chanProc4Simplified, self.chanProc4Simplified),
             ELAN(self.chanProc4Simplified, self.chanProc4Simplified),

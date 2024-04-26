@@ -196,7 +196,7 @@ ModelEvaluation(
     device=device,
     dataset=train_data,
     calcloss=calcloss,
-).viewmodel()
+).lossDistribution()
 
 
 # %%
