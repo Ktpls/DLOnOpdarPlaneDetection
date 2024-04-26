@@ -261,14 +261,14 @@ class MPn(torch.nn.Module):
             ConvBnHs(in_channels, cPath, 3),
         )
         self.wayConv = torch.nn.Sequential(
+            ConvBnHs(in_channels, cPath, 1),
             ConvBnHs(
-                in_channels,
                 cPath,
-                downSamplingStride,
+                cPath,
+                kernel_size=3,
                 stride=downSamplingStride,
-                padding=0,
+                padding=1,
             ),
-            ConvBnHs(cPath, cPath, 3),
         )
         self.combiner = ConvBnHs(cPath * 2, out_channels, 3)
 
