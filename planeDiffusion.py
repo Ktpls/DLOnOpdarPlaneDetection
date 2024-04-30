@@ -22,123 +22,17 @@ installLib(r"/kaggle/working", "https://github.com/Ktpls/DLOnOpdarPlaneDetection
 
 # %%
 from utilitypack.util_import import *
-nntrackerdev_predef=import_or_reload("predef.nntrackerdev_predef")
+
+nntrackerdev_predef = import_or_reload("predef.nntrackerdev_predef")
 from predef.nntrackerdev_predef import *
-nntracker=import_or_reload("nntracker")
+
+nntracker = import_or_reload("nntracker")
 from predef.nntracker import *
+
+from predef.planeDiffusionPredef import *
 
 getDeviceInfo()
 device = getDevice()
-
-
-class T2I(torch.nn.Module):
-    resolution = [28, 28]
-    chanInput = 1
-    nPrompt = 10
-    chanPrompt = 4
-    chanImgEncoded = 4
-    subsampleRate0_1 = 2
-    subsampleRate1_2 = 2
-    chanFeature0 = 32
-    chanFeature1 = 64
-    chanFeature2 = 128
-    featExport0 = 1
-    featExport1 = 4
-    featExport2 = 7
-
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__()
-        resolution = self.resolution
-        chanInput = self.chanInput
-        nPrompt = self.nPrompt
-        chanPrompt = self.chanPrompt
-        chanImgEncoded = self.chanImgEncoded
-        subsampleRate0_1 = self.subsampleRate0_1
-        subsampleRate1_2 = self.subsampleRate1_2
-        chanFeature0 = self.chanFeature0
-        chanFeature1 = self.chanFeature1
-        chanFeature2 = self.chanFeature2
-        self.promptEncoder = torch.nn.Sequential(
-            torch.nn.Linear(nPrompt, 128),
-            torch.nn.Hardswish(),
-            torch.nn.Linear(128, chanPrompt * np.prod(resolution)),
-            torch.nn.Hardswish(),
-            ModuleFunc(lambda x: x.reshape([-1, chanPrompt, *resolution])),
-        )
-        self.imgEncoder = torch.nn.Sequential(
-            ConvBnHs(chanInput, chanImgEncoded, 7),
-            ConvBnHs(chanImgEncoded, chanImgEncoded),
-        )
-        self.featureExtractor = torch.nn.Sequential(
-            ConvBnHs(chanImgEncoded + chanPrompt, chanFeature0),
-            res_through(
-                ConvBnHs(chanFeature0, chanFeature0),
-                ConvBnHs(chanFeature0, chanFeature0),
-            ),
-            torch.nn.MaxPool2d(subsampleRate0_1, subsampleRate0_1),
-            ConvBnHs(chanFeature0, chanFeature1),
-            res_through(
-                ConvBnHs(chanFeature1, chanFeature1),
-                ConvBnHs(chanFeature1, chanFeature1),
-            ),
-            torch.nn.MaxPool2d(subsampleRate1_2, subsampleRate1_2),
-            ConvBnHs(chanFeature1, chanFeature2),
-            res_through(
-                ConvBnHs(chanFeature2, chanFeature2),
-                ConvBnHs(chanFeature2, chanFeature2),
-            ),
-        )
-        self.Path0 = torch.nn.Sequential(
-            res_through(
-                ConvBnHs(chanFeature0, chanFeature0),
-                ConvBnHs(chanFeature0, chanFeature0),
-            ),
-        )
-        self.Path1 = torch.nn.Sequential(
-            res_through(
-                ConvBnHs(chanFeature1, chanFeature1),
-                ConvBnHs(chanFeature1, chanFeature1),
-            ),
-        )
-        self.Path2 = torch.nn.Sequential(
-            res_through(
-                ConvBnHs(chanFeature2, chanFeature2),
-                ConvBnHs(chanFeature2, chanFeature2),
-            ),
-        )
-        self.path2topath0 = torch.nn.Upsample(
-            scale_factor=subsampleRate1_2 * subsampleRate0_1, mode="bilinear"
-        )
-        self.path1topath0 = torch.nn.Upsample(
-            scale_factor=subsampleRate0_1, mode="bilinear"
-        )
-        self.output = torch.nn.Sequential(
-            ConvBnHs(chanFeature0 + chanFeature1 + chanFeature2, chanFeature0),
-            res_through(
-                ConvBnHs(chanFeature0, chanFeature0),
-                ConvBnHs(chanFeature0, chanFeature0),
-            ),
-            ConvBnHs(chanFeature0, chanInput),
-        )
-
-    def forward(self, noiimg, cls):
-        imgEncoded = self.imgEncoder(noiimg)
-        promptEncoded = self.promptEncoder(cls)
-        x = torch.cat([imgEncoded, promptEncoded], dim=-3)
-        for i, m in enumerate(self.featureExtractor):
-            x = m(x)
-            if i == self.featExport0:
-                x0 = x
-            if i == self.featExport1:
-                x1 = x
-            if i == self.featExport2:
-                x2 = x
-        x0 = self.Path0(x0)
-        x1 = self.Path1(x1)
-        x2 = self.Path2(x2)
-        x = torch.concat([x0, self.path1topath0(x1), self.path2topath0(x2)], dim=-3)
-        x = self.output(x)
-        return x
 
 
 class PlaneDiffusion(T2I):
@@ -157,21 +51,12 @@ class PlaneDiffusion(T2I):
     featExport2 = 7
 
 
-class DiffusionUtil:
-    @staticmethod
-    def noiseLike(x, sigma=1, mu=0):
-        return torch.randn_like(x) * sigma
-
-    @staticmethod
-    def noisedImg(img, sigma=1, snr=0.5):
-        noise = DiffusionUtil.noiseLike(img, sigma)
-        noiimg = noise * (1 - snr) + img * snr
-        return noiimg
-
-
-datasetroot = r"dataset/"
-
 print("loading dataset")
+RunOnWtUtilityEnviroment = True
+if RunOnWtUtilityEnviroment:
+    datasetroot = r"dataset/"
+else:
+    datasetroot = r"/kaggle/input/nntrackerle2renh"
 datasets = {
     "LE2REnh": NnTrackerDataset(r"LE2REnh/LE2REnh.zip", r"LE2REnh/all.xlsx", "zip"),
     "SmallAug": NnTrackerDataset(r"SmallAug/SmallAug.zip", r"SmallAug/all.xlsx", "zip"),
@@ -214,7 +99,7 @@ model = setModule(PlaneDiffusion(), modelPath, device)
 # loss
 
 
-def calcLoss(img, pred):
+def calcLoss(img, pred, device):
     edgeKernelSize = 5
 
     def calcEdge(img):
@@ -305,7 +190,7 @@ def viewGeneration():
 
         def iterWork(self, i):
             spl, lbl, pi = datasetUsing[np.random.randint(0, len(datasetUsing))]
-            splNoise = torch.clip(DiffusionUtil.noiseLike(spl, 0.25, 0.5), 0, 1)
+            splNoise = torch.clip(DiffusionUtil.noiseLike(spl, 0.155, 0.639), 0, 1)
             self.mpp.toNextPlot()
             plt.imshow(planeInfo2Lbl(pi.numpy(), stdShape), cmap="gray")
             self.mpp.toNextPlot()
