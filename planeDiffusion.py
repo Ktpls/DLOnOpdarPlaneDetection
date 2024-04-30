@@ -255,11 +255,11 @@ def view():
                 .numpy()
             )
             self.mpp.toNextPlot()
-            plt.imshow(tensorimg2ndarray(spl))
+            plt.imshow(np.flip(tensorimg2ndarray(spl), axis=-1))
             self.mpp.toNextPlot()
-            plt.imshow(tensorimg2ndarray(noisedSpl))
+            plt.imshow(planeInfo2Lbl(pi.numpy(), stdShape), cmap="gray")
             self.mpp.toNextPlot()
-            plt.imshow(tensorimg2ndarray(pred))
+            plt.imshow(np.flip(tensorimg2ndarray(pred), axis=-1))
 
     pltShape = np.array([6, 2])
     mppShape = pltShape * [1, 3]
