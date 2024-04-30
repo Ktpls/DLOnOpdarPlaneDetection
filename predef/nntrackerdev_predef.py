@@ -3,6 +3,7 @@ from utilitypack.util_import import *
 from utilitypack.util_np import *
 from utilitypack.util_ocv import *
 from utilitypack.util_torch import *
+from utilitypack.util_pyplot import *
 import torchvision
 from torch import nn
 
@@ -481,23 +482,6 @@ def AABBOf(lbl, noobjthresh=5):
     # (x1, x2, y1, y2, c)
 
     return XYXY2XYWH(x1, y1, x2, y2) + (1,)
-
-
-class MassivePicturePlot:
-    def __init__(self, plotShape, fig=None):
-        self.plotShape = plotShape
-        self.fig = fig if fig else plt.figure(figsize=(20, 20))
-        self.i = 1
-
-    def toNextPlot(self) -> plt.Axes:
-        if self.isFull():
-            raise IndexError("Too many pictures")
-        ax = self.fig.add_subplot(self.plotShape[0], self.plotShape[1], self.i)
-        self.i += 1
-        return ax
-
-    def isFull(self):
-        return self.i > np.prod(self.plotShape)
 
 
 def PI2Str(pi):

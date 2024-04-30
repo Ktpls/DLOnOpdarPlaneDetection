@@ -131,32 +131,6 @@ class SpatialPositioning(torch.nn.Module):
         return x
 
 
-class ConvBnHs(torch.nn.Module):
-    def __init__(
-        self,
-        in_channels,
-        out_channels,
-        kernel_size,
-        stride=1,
-        padding="same",
-        ifBn=True,
-    ):
-        super().__init__()
-        self.conv = torch.nn.Conv2d(
-            in_channels, out_channels, kernel_size, stride=stride, padding=padding
-        )
-        self.bn = torch.nn.BatchNorm2d(out_channels) if ifBn else None
-        self.ifBn = ifBn
-        self.hs = torch.nn.Hardswish()
-
-    def forward(self, x):
-        x = self.conv(x)
-        if self.bn is not None:
-            x = self.bn(x)
-        x = self.hs(x)
-        return x
-
-
 class PartialChannel(torch.nn.Module):
     def __init__(self, idx: typing.Union[int, slice]) -> None:
         super().__init__()

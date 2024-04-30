@@ -1,9 +1,21 @@
 """
-installLib(r"/kaggle/working", "https://github.com/Ktpls/DLOnOpdarPlaneDetection.git")
+import os
+import sys
+def installLib(installpath, gitpath):
+    projPath = os.path.join(installpath, os.path.splitext(os.path.basename(gitpath))[0])
+    if not os.path.exists(projPath):
+        os.system(rf"git clone {gitpath} {projPath}")
+    else:
+        %cd {projPath}
+        os.system(rf"git pull")
+    if projPath not in sys.path:
+        sys.path.append(projPath)
 installLib(
     r"/kaggle/working",
     "https://github.com/Ktpls/pyinclude.git",
 )
+installLib(r"/kaggle/working", "https://github.com/Ktpls/DLOnOpdarPlaneDetection.git")
+%cd "/kaggle/working"
 #!rm "/kaggle/working/DLOnOpdarPlaneDetection/nntracker.pth"
 """
 # %%
@@ -25,7 +37,7 @@ device = getDevice()
 modelpath = r"nntracker.pth"
 model = getmodel(
     # nntracker_pi(),
-    nntracker_respi_ELAN(
+    nntracker_respi_MPn(
         freeLayers=(
             # "features.0",
             # "features.1",
@@ -194,9 +206,9 @@ savemodel(model, modelpath)
 ModelEvaluation(
     model=model,
     device=device,
-    dataset=train_data,
+    dataset=test_data,
     calcloss=calcloss,
-).lossDistribution()
+).viewmodel()
 
 
 # %%
