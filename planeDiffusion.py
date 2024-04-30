@@ -1,3 +1,26 @@
+# %%
+"""
+import os
+import sys
+def installLib(installpath, gitpath):
+    projPath = os.path.join(installpath, os.path.splitext(os.path.basename(gitpath))[0])
+    if not os.path.exists(projPath):
+        os.system(rf"git clone {gitpath} {projPath}")
+    else:
+        %cd {projPath}
+        os.system(rf"git pull")
+    if projPath not in sys.path:
+        sys.path.append(projPath)
+installLib(
+    r"/kaggle/working",
+    "https://github.com/Ktpls/pyinclude.git",
+)
+installLib(r"/kaggle/working", "https://github.com/Ktpls/DLOnOpdarPlaneDetection.git")
+%cd "/kaggle/working"
+#!rm "/kaggle/working/DLOnOpdarPlaneDetection/nntracker.pth"
+"""
+
+# %%
 from predef.nntrackerdev_predef import *
 from predef.nntracker import *
 
@@ -133,7 +156,7 @@ class PlaneDiffusion(T2I):
 
 class DiffusionUtil:
     @staticmethod
-    def noiseLike(x, sigma):
+    def noiseLike(x, sigma=1, mu=0):
         return torch.randn_like(x) * sigma
 
     @staticmethod
@@ -194,7 +217,7 @@ def calcLoss(img, pred):
     def calcEdge(img):
         return img - torch.nn.functional.conv2d(
             img,
-            torch.ones([1, 3, edgeKernelSize, edgeKernelSize])
+            torch.ones([1, 3, edgeKernelSize, edgeKernelSize]).to(device)
             / (3 * edgeKernelSize**2),
             padding="same",
         )
@@ -247,22 +270,49 @@ def view():
 
         def iterWork(self, i):
             spl, lbl, pi = train_data[np.random.randint(0, len(train_data))]
-            noisedSpl = DiffusionUtil.noisedImg(spl)
             pred = (
-                model(noisedSpl.unsqueeze(0).to(device), pi.unsqueeze(0).to(device))
+                model(
+                    DiffusionUtil.noisedImg(spl).unsqueeze(0).to(device),
+                    pi.unsqueeze(0).to(device),
+                )
                 .squeeze(0)
                 .cpu()
                 .numpy()
             )
             self.mpp.toNextPlot()
-            plt.imshow(np.flip(tensorimg2ndarray(spl), axis=-1))
+            plt.imshow(tensorimg2ndarray(spl))
             self.mpp.toNextPlot()
             plt.imshow(planeInfo2Lbl(pi.numpy(), stdShape), cmap="gray")
             self.mpp.toNextPlot()
-            plt.imshow(np.flip(tensorimg2ndarray(pred), axis=-1))
+            plt.imshow(tensorimg2ndarray(pred))
 
     pltShape = np.array([6, 2])
     mppShape = pltShape * [1, 3]
+
+    md(model, mppShape, np.prod(pltShape)).do()
+
+
+def viewGeneration():
+    pltShape = np.array([6, 1])
+    iterNum = 20
+    mppShape = pltShape * [2, (1 + 1 + iterNum) // 2]
+    datasetUsing = train_data
+
+    class md(ModelDemo):
+
+        def iterWork(self, i):
+            spl, lbl, pi = train_data[np.random.randint(0, len(train_data))]
+            splNoise = torch.clip(DiffusionUtil.noiseLike(spl, 0.25, 0.5), 0, 1)
+            self.mpp.toNextPlot()
+            plt.imshow(planeInfo2Lbl(pi.numpy(), stdShape), cmap="gray")
+            self.mpp.toNextPlot()
+            plt.imshow(tensorimg2ndarray(splNoise))
+            x = splNoise.unsqueeze(0).to(device)
+            pi = pi.unsqueeze(0).to(device)
+            for j in range(iterNum):
+                pred = model(DiffusionUtil.noisedImg(x), pi.unsqueeze(0).to(device))
+                self.mpp.toNextPlot()
+                plt.imshow(tensorimg2ndarray(pred.squeeze(0).cpu().numpy()))
 
     md(model, mppShape, np.prod(pltShape)).do()
 

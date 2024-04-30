@@ -39,6 +39,7 @@ class ImgReaderFolder(ImgReader):
     def read(self, path):
         m = os.path.join(self.folder, path)
         m = cv.imread(m, 1)
+        m= cv.cvtColor(m, cv.COLOR_BGR2RGB)
         m = m.astype(np.float32) / 255
         return m
 
@@ -53,6 +54,7 @@ class ImgReaderZip(ImgReader):
         m = self.zipf.read(path)
         m = np.frombuffer(m, dtype=np.uint8)
         m = cv.imdecode(m, 1)
+        m= cv.cvtColor(m, cv.COLOR_BGR2RGB)
         m = m.astype(np.float32) / 255
         return m
 
