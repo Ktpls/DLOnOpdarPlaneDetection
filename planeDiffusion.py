@@ -21,7 +21,10 @@ installLib(r"/kaggle/working", "https://github.com/Ktpls/DLOnOpdarPlaneDetection
 """
 
 # %%
+from utilitypack.util_import import *
+nntrackerdev_predef=import_or_reload("predef.nntrackerdev_predef")
 from predef.nntrackerdev_predef import *
+nntracker=import_or_reload("nntracker")
 from predef.nntracker import *
 
 getDeviceInfo()
@@ -294,14 +297,14 @@ def view():
 
 def viewGeneration():
     pltShape = np.array([6, 1])
-    iterNum = 20
-    mppShape = pltShape * [2, (1 + 1 + iterNum) // 2]
+    iterNum = 6
+    mppShape = pltShape * [1, (1 + 1 + iterNum)]
     datasetUsing = train_data
 
     class md(ModelDemo):
 
         def iterWork(self, i):
-            spl, lbl, pi = train_data[np.random.randint(0, len(train_data))]
+            spl, lbl, pi = datasetUsing[np.random.randint(0, len(datasetUsing))]
             splNoise = torch.clip(DiffusionUtil.noiseLike(spl, 0.25, 0.5), 0, 1)
             self.mpp.toNextPlot()
             plt.imshow(planeInfo2Lbl(pi.numpy(), stdShape), cmap="gray")
@@ -317,4 +320,4 @@ def viewGeneration():
     md(model, mppShape, np.prod(pltShape)).do()
 
 
-view()
+viewGeneration()
