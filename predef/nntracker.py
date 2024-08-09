@@ -87,16 +87,6 @@ class PermuteModule(torch.nn.Module):
         return torch.permute(x, self.dims)
 
 
-class GlobalAvePooling(torch.nn.Module):
-    def __init__(self) -> None:
-        super().__init__()
-
-    @staticmethod
-    def static_forward(x):
-        return torch.mean(x, dim=(2, 3))
-
-    def forward(self, x):
-        return GlobalAvePooling.static_forward(x)
 
 
 class SpatialPositioning(torch.nn.Module):

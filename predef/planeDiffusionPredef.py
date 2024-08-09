@@ -9,7 +9,6 @@ class T2I(torch.nn.Module):
     resolution = [28, 28]
     chanInput = 1
     nPrompt = 10
-    nSigma = 2
     chanPrompt = 4
     chanImgEncoded = 4
     subsampleRate0_1 = 2
@@ -28,14 +27,13 @@ class T2I(torch.nn.Module):
         nPrompt = self.nPrompt
         chanPrompt = self.chanPrompt
         chanImgEncoded = self.chanImgEncoded
-        nSigma = self.nSigma
         subsampleRate0_1 = self.subsampleRate0_1
         subsampleRate1_2 = self.subsampleRate1_2
         chanFeature0 = self.chanFeature0
         chanFeature1 = self.chanFeature1
         chanFeature2 = self.chanFeature2
         self.promptEncoder = torch.nn.Sequential(
-            torch.nn.Linear(nPrompt + nSigma, 128),
+            torch.nn.Linear(nPrompt, 128),
             torch.nn.Hardswish(),
             torch.nn.Linear(128, chanPrompt * np.prod(resolution)),
             torch.nn.Hardswish(),
@@ -83,10 +81,10 @@ class T2I(torch.nn.Module):
             ),
         )
         self.path2topath0 = torch.nn.Upsample(
-            scale_factor=subsampleRate1_2 * subsampleRate0_1, mode="bilinear"
+            scale_factor=subsampleRate1_2 * subsampleRate0_1, mode="nearest"
         )
         self.path1topath0 = torch.nn.Upsample(
-            scale_factor=subsampleRate0_1, mode="bilinear"
+            scale_factor=subsampleRate0_1, mode="nearest"
         )
         self.output = torch.nn.Sequential(
             ConvBnHs(chanFeature0 + chanFeature1 + chanFeature2, chanFeature0),
@@ -97,10 +95,7 @@ class T2I(torch.nn.Module):
             ConvBnHs(chanFeature0, chanInput),
         )
 
-    def forward(self, noiimg, prompt, sigmaLower, sigmaUpper):
-        prompt = torch.concat(
-            [prompt, sigmaLower.unsqueeze(-1), sigmaUpper.unsqueeze(-1)], dim=-1
-        )
+    def forward(self, noiimg, prompt):
         imgEncoded = self.imgEncoder(noiimg)
         promptEncoded = self.promptEncoder(prompt)
         x = torch.cat([imgEncoded, promptEncoded], dim=-3)
@@ -126,9 +121,9 @@ class DiffusionUtil:
         return torch.randn_like(x) * sigma + mu
 
     @staticmethod
-    def noisedImg(img, sigma=1, snr=0.5):
+    def noisedImg(img, sigma=1):
         noise = DiffusionUtil.noiseLike(img, sigma)
-        noiimg = noise * (1 - snr) + img * snr
+        noiimg = noise + img
         return noiimg
 
 
