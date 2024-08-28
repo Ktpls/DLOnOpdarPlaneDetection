@@ -13,6 +13,8 @@ stdShape = [128, 128]
 import importlib
 import sys
 
+device = getDevice()
+
 
 def import_or_reload(module_name):
     module = sys.modules.get(module_name)
@@ -126,10 +128,11 @@ def planeInfo2Lbl(tup, lblShape):
     meanY = meanY * h
     wingSpan = wingSpan * w
     lbl = np.zeros(lblShape + [1], dtype=np.float32)
-    X = np.arange(w).reshape(1, w, 1)
-    Y = np.arange(h).reshape(h, 1, 1)
-    dist = np.sqrt((X - meanX) ** 2 + (Y - meanY) ** 2)
-    lbl[dist < wingSpan / 2] = 1
+    if isObj > 0.5:
+        X = np.arange(w).reshape(1, w, 1)
+        Y = np.arange(h).reshape(h, 1, 1)
+        dist = np.sqrt((X - meanX) ** 2 + (Y - meanY) ** 2)
+        lbl[dist < wingSpan / 2] = 1
     return lbl
 
 
@@ -372,6 +375,7 @@ class labeldataset(torch.utils.data.Dataset):
         selection,
         size,
         sheetname=None,
+        device="cpu",
         stdShape=None,
         augSteps=list(),
     ):
@@ -409,6 +413,7 @@ class labeldataset(torch.utils.data.Dataset):
         self.items: list[SampleItem] = items
         self.augger = NonAffineTorchAutoAugment()
         self.totensor = torchvision.transforms.ToTensor()
+        self.device = device
 
         return self
 
@@ -436,9 +441,9 @@ class labeldataset(torch.utils.data.Dataset):
 
     def procItemToTensor(self, item):
         return (
-            self.totensor(item.spl),
-            self.totensor(item.lbl),
-            torch.tensor(item.pi, dtype=torch.float32),
+            self.totensor(item.spl).to(device=self.device),
+            self.totensor(item.lbl).to(device=self.device),
+            torch.tensor(item.pi, dtype=torch.float32).to(device=self.device),
         )
 
     def __getitem__(self, idx):
@@ -483,155 +488,6 @@ def AABBOf(lbl, noobjthresh=5):
 
 def PI2Str(pi):
     return ",".join([f"{i:.2f}" for i in pi])
-
-
-@dataclasses.dataclass
-class ModelEvaluation:
-    dataset: labeldataset
-    model: torch.nn.Module = None
-    device: str = "cpu"
-    calcloss: typing.Callable = None
-
-    @dataclasses.dataclass
-    class InferenceResult:
-        src: torch.Tensor
-        lbl: torch.Tensor
-        pi: torch.Tensor
-        pihat: torch.Tensor
-        loss: float
-        timeConsumption: float
-
-    def DrawData(self, i=None):
-        if i is None:
-            # draw random
-            return self.dataset[0]
-        else:
-            return self.dataset.items[i]
-
-    def Inferencable(self):
-        return self.model is not None and self.calcloss is not None
-
-    def Inference(self, src: torch.Tensor):
-        return self.model.forward(src.unsqueeze(0).to(self.device))
-
-    def Calcloss(self, pi: torch.Tensor, pihat: torch.Tensor):
-        return self.calcloss(pi.unsqueeze(0).to(self.device), pihat).item()
-
-    def IterDataAndInference(self, iterWork: typing.Callable, num_draws):
-        """
-        iteration common method
-        """
-        if self.Inferencable():
-            self.model.eval()
-        with torch.no_grad():
-            prog = Progress(num_draws)
-            for i in range(num_draws):
-                while True:
-                    src, lbl, pi = self.DrawData()
-                    if self.Inferencable():
-                        tstart = time.perf_counter()
-                        pihat = self.Inference(src)
-                        tend = time.perf_counter()
-                        timeConsumption = tend - tstart
-                        loss = self.Calcloss(pi, pihat)
-                    else:
-                        pihat, timeConsumption, loss = [None] * 3
-                    ret = iterWork(
-                        ModelEvaluation.InferenceResult(
-                            src=src,
-                            lbl=lbl,
-                            pi=pi,
-                            pihat=pihat,
-                            loss=loss,
-                            timeConsumption=timeConsumption,
-                        )
-                    )
-                    # break on not specicified to be False
-                    if ret != False:
-                        break
-                prog.update(i)
-            prog.setFinish()
-
-    def lossDistribution(self, num_draws=100):
-        loss_values = []
-        self.IterDataAndInference(
-            lambda result: loss_values.append(result.loss),
-            num_draws=num_draws,
-        )
-        loss_values = np.array(loss_values)
-
-        plt.hist(loss_values, bins=100, color="blue", edgecolor="black")
-        plt.xlabel("Loss Value")
-        plt.ylabel("Frequency")
-        plt.title("Loss Distribution")
-        aveLoss = np.sum(loss_values) / len(loss_values)
-        stdErr = np.std(loss_values)
-        print(f"{aveLoss=}")
-        print(f"{stdErr=}")
-
-    def viewmodel(self, isWanted=None):
-        isWanted = isWanted if isWanted else lambda x: True
-        mpp = MassivePicturePlot([7, 8])
-        samplenum = np.prod([7, 4])
-        imshowconfig = {"vmin": 0, "vmax": 1}
-        totalinferencetime = 0
-        infercount = 0
-        totalLoss = 0
-
-        def iterWork(result: ModelEvaluation.InferenceResult):
-            nonlocal totalinferencetime, infercount, totalLoss
-            if not isWanted(result.loss):
-                return False
-            totalLoss += result.loss
-            totalinferencetime += result.timeConsumption
-            infercount += 1
-            pihat = result.pihat[0].cpu().numpy()
-
-            pi = result.pi.numpy()
-            src, lbl = [tensorimg2ndarray(d) for d in [result.src, result.lbl]]
-
-            mpp.toNextPlot()
-            plt.title(PI2Str(pi))
-            plt.imshow(cv.cvtColor(src, cv.COLOR_BGR2RGB))
-
-            mpp.toNextPlot()
-            lblComparasion = (
-                np.array(
-                    [
-                        lbl,
-                        # planeInfo2Lbl(pi, stdShape),
-                        np.zeros_like(lbl),
-                        planeInfo2Lbl(pihat, stdShape),
-                    ]
-                )
-                .squeeze(-1)
-                .transpose([1, 2, 0])
-            )
-
-            plt.title(PI2Str(pihat))
-            plt.imshow(lblComparasion, label="lblComparasion", **imshowconfig)
-
-        self.IterDataAndInference(iterWork, samplenum)
-
-        print(f"average inference time={totalinferencetime / samplenum}")
-        print(f"average loss={totalLoss / samplenum}")
-
-
-def savemodel(model: torch.nn.Module, path):
-    torch.save(model.state_dict(), path)
-    print(f"Saved PyTorch Model State to {path}")
-
-
-def DatasetBenchmark(dataset: labeldataset):
-    sampleNum = 8192
-    prog = Progress(sampleNum)
-    ps = perf_statistic(True)
-    for i in range(sampleNum):
-        dataset[0]
-        prog.update(i)
-    ps.stop()
-    prog.setFinish()
-    print(f"draw {sampleNum} samples in {ps.time()}s, {sampleNum/ps.time()}it/s")
 
 
 def getmodel(model0: torch.nn.Module, modelpath, device):

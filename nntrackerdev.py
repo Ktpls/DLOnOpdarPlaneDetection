@@ -34,9 +34,8 @@ else:
 
 # %%
 # nn def
-device = getDevice()
 modelpath = r"nntracker.pth"
-model = getmodel(
+model: nntracker_respi_MPn = getmodel(
     # nntracker_pi(),
     nntracker_respi_MPn(
         freeLayers=(
@@ -74,22 +73,20 @@ datasets = {
     "smallAug": NnTrackerDataset(r"smallAug", r"smallAug/all.xlsx"),
     "affined": NnTrackerDataset(r"affined", r"affined/all.xlsx"),
 }
-train_data = datasets["affined"]
+train_data = datasets["smallAug"]
 train_data = labeldataset().init(
-    os.path.join(datasetroot, train_data.path),
-    os.path.join(datasetroot, train_data.sel),
-    8192,
-    None,
-    stdShape,
+    path=os.path.join(datasetroot, train_data.path),
+    selection=os.path.join(datasetroot, train_data.sel),
+    size=8192,
+    stdShape=stdShape,
+    device=device,
     augSteps=[
         # labeldataset.AugSteps.affine,
         # labeldataset.AugSteps.rndln,
         # labeldataset.AugSteps.autoaug,
         labeldataset.AugSteps.gausNoise,
     ],
-) 
-test_data = datasets["affined"]
-test_data = train_data
+)
 print("load finished")
 
 # %%
@@ -99,61 +96,9 @@ num_workers = 0
 train_dataloader = DataLoader(
     train_data, batch_size=batch_size, num_workers=num_workers
 )
-test_dataloader = DataLoader(test_data, batch_size=batch_size, num_workers=num_workers)
-
-
-# %%
-# lossFunc
-
-
-def calcloss(pi, pihat):
-    batch, dimPi = pi.shape
-    isObj = pi[:, 0].unsqueeze(1)
-    isObjHat = pihat[:, 0].unsqueeze(1)
-
-    coef = torch.tensor(
-        [1, 1, 1.5], dtype=torch.float32, device=device, requires_grad=False
-    ).unsqueeze(0)
-    detailMask = isObj
-    detailMse = (pihat - pi)[:, 1:] ** 2
-    detailLoss = detailMask * coef * detailMse
-
-    boolIsObj = isObj > 0.5
-    alpha = 1 - 52 / 64
-    alphat = torch.where(boolIsObj, alpha, 1 - alpha)
-    pt = torch.where(boolIsObj, isObjHat, 1 - isObjHat)
-    gamma = 2
-    classLoss = -alphat * (1 - pt) ** gamma * torch.log(pt)
-
-    loss = torch.sum(detailLoss) + torch.sum(classLoss)
-    return loss
-
 
 # %%
 # train
-
-
-def trainmainprogress(datatuple):
-    model.train()
-    src, lbl, pi = datatuple
-    pihat = model.forward(src.to(device))
-    loss = calcloss(pi.to(device), pihat)
-    return loss
-
-
-def onoutput(batch, aveerr):
-    # return
-    with torch.no_grad():
-        model.eval()
-        lossTotal = 0
-        numTotal = 0
-        for src, lbl, pi in test_dataloader:
-            pihat = model.forward(src.to(device))
-            lossTotal += calcloss(pi.to(device), pihat).item()
-            numTotal += batchsizeof(src)
-            break
-    print(f"testaveerr: {lossTotal/numTotal}")
-    # writer.add_scalar("aveerr", aveerr, batch)
 
 
 trainpipe.train(
@@ -163,10 +108,9 @@ trainpipe.train(
         lr=1e-4,
         weight_decay=1e-5,
     ),
-    trainmainprogress,
+    lambda *p: model.trainprogress(*p),
     epochnum=10,
     outputperbatchnum=1000,
-    customSubOnOutput=onoutput,
 )
 
 
@@ -177,12 +121,7 @@ savemodel(model, modelpath)
 
 # %%
 # view effect
-ModelEvaluation(
-    model=model,
-    device=device,
-    dataset=test_data,
-    calcloss=calcloss,
-).viewmodel()
+model.demo(train_data)
 
 
 # %%

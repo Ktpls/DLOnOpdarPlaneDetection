@@ -247,12 +247,13 @@ class FinalModule(torch.nn.Module):
         return filter(
             lambda x: x.requires_grad is not False, super().parameters(recurse)
         )
-    
-    def calcloss(self, *arg, **kw):...
 
-    def trainprogress(self, datatuple):...
+    def calcloss(self, *arg, **kw): ...
 
-    def demoprogress(self, datatuple):...
+    def trainprogress(self, datatuple): ...
+
+    def inferenceProgress(self, datatuple):
+        pass
 
     def save(self, path):
         savemodel(self, path)
@@ -413,6 +414,79 @@ class nntracker_respi(FinalModule):
         sum16, sum8, sum4 = self.neckForward(out16, out8, out4)
         x = self.headForward(sum16, sum8, sum4)
         return x
+
+    def trainprogress(self, datatuple):
+        self.train()
+        src, lbl, pi = datatuple
+        src = src.to(device)
+        pi = pi.to(device)
+        pihat = self.forward(src)
+        loss = self.calcloss(pi, pihat)
+        return loss
+
+    def inferenceProgress(self, src):
+        return self.forward(src.unsqueeze(0)).squeeze(0)
+
+    def demo(self, dataset: labeldataset):
+        mpp = MassivePicturePlot([7, 8])
+        samplenum = np.prod([7, 4])
+        imshowconfig = {"vmin": 0, "vmax": 1}
+        ps = perf_statistic()
+        with torch.no_grad():
+            prog = Progress(samplenum)
+            for i in range(samplenum):
+                datatuple = dataset[0]
+                src, lbl, pi = datatuple
+                ps.start()
+                pihat = self.inferenceProgress(src)
+                ps.stop().countcycle()
+                src, lbl = [tensorimg2ndarray(d) for d in [src, lbl]]
+
+                mpp.toNextPlot()
+                plt.title(PI2Str(pi))
+                plt.imshow(src)
+
+                mpp.toNextPlot()
+                lblComparasion = (
+                    np.array(
+                        [
+                            lbl,
+                            # planeInfo2Lbl(pi, stdShape),
+                            np.zeros_like(lbl),
+                            planeInfo2Lbl(pihat.cpu().numpy(), stdShape),
+                        ]
+                    )
+                    .squeeze(-1)
+                    .transpose([1, 2, 0])
+                )
+
+                plt.title(PI2Str(pihat))
+                plt.imshow(lblComparasion, label="lblComparasion", **imshowconfig)
+                prog.update(i)
+            prog.setFinish()
+
+    def calcloss(self, pi: torch.Tensor, pihat: torch.Tensor):
+        device = pihat.device
+        batch, dimPi = pi.shape
+        isObj = pi[:, 0].unsqueeze(1)
+        isObjHat = pihat[:, 0].unsqueeze(1)
+
+        coef = torch.tensor(
+            [1, 1, 1.5], dtype=torch.float32, device=device, requires_grad=False
+        ).unsqueeze(0)
+        detailMask = isObj
+        detailMse = (pihat - pi)[:, 1:] ** 2
+        detailLoss = detailMask * coef * detailMse
+
+        boolIsObj = isObj > 0.5
+        alpha = 1 - 52 / 64  # from experiment
+        alphat = torch.where(boolIsObj, alpha, 1 - alpha)
+        pt = torch.where(boolIsObj, isObjHat, 1 - isObjHat)
+        gamma = 2
+        classLoss = -alphat * (1 - pt) ** gamma * torch.log(pt)
+
+        loss = torch.sum(detailLoss) + torch.sum(classLoss)
+        return loss
 
 
 class nntracker_respi_MPn(nntracker_respi):
