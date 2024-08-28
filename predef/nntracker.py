@@ -87,8 +87,6 @@ class PermuteModule(torch.nn.Module):
         return torch.permute(x, self.dims)
 
 
-
-
 class SpatialPositioning(torch.nn.Module):
     def __init__(self, shape):
         super().__init__()
@@ -249,6 +247,15 @@ class FinalModule(torch.nn.Module):
         return filter(
             lambda x: x.requires_grad is not False, super().parameters(recurse)
         )
+    
+    def calcloss(self, *arg, **kw):...
+
+    def trainprogress(self, datatuple):...
+
+    def demoprogress(self, datatuple):...
+
+    def save(self, path):
+        savemodel(self, path)
 
 
 class PRNAddition:
@@ -261,6 +268,17 @@ class PRNAddition:
 
     def staticMethod(self):
         return functools.partial(self.__call__, self=self)
+
+
+class InspFuncMixture(torch.nn.Module):
+    def __init__(self, methodByChannel):
+        super().__init__()
+        self.methodByChannel = methodByChannel
+
+    def forward(self, x):
+        result = [self.methodByChannel[c](x[:, c : c + 1]) for c in range(x.shape[1])]
+        result = torch.concat(result, dim=1)
+        return result
 
 
 class nntracker_respi(FinalModule):
@@ -343,6 +361,14 @@ class nntracker_respi(FinalModule):
             torch.nn.Hardswish(),
             torch.nn.Dropout(dropout),
             torch.nn.Linear(self.last_channel, 4),
+            InspFuncMixture(
+                [
+                    torch.sigmoid,
+                    torch.nn.functional.hardswish,
+                    torch.nn.functional.hardswish,
+                    torch.nn.functional.hardswish,
+                ]
+            ),
         )
 
     def setBackboneFree(self, backbone: torch.nn.Module, freeLayers):

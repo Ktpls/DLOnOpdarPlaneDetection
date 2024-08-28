@@ -7,7 +7,6 @@ from utilitypack.util_pyplot import *
 import torchvision
 from torch import nn
 
-# (?<!torch\.)(?=nn\.) => torch.
 from torch.utils.data import DataLoader
 
 stdShape = [128, 128]
@@ -39,7 +38,7 @@ class ImgReaderFolder(ImgReader):
     def read(self, path):
         m = os.path.join(self.folder, path)
         m = cv.imread(m, 1)
-        m= cv.cvtColor(m, cv.COLOR_BGR2RGB)
+        m = cv.cvtColor(m, cv.COLOR_BGR2RGB)
         m = m.astype(np.float32) / 255
         return m
 
@@ -54,7 +53,7 @@ class ImgReaderZip(ImgReader):
         m = self.zipf.read(path)
         m = np.frombuffer(m, dtype=np.uint8)
         m = cv.imdecode(m, 1)
-        m= cv.cvtColor(m, cv.COLOR_BGR2RGB)
+        m = cv.cvtColor(m, cv.COLOR_BGR2RGB)
         m = m.astype(np.float32) / 255
         return m
 
@@ -263,7 +262,7 @@ def safeAffineAug(spl, lbl):
     wh = np.array([w, h])
     rounds = 0
     while True:
-        if rounds >= 20:
+        if rounds >= 50:
             raise ValueError("too many regenerations!")
         rounds += 1
         theta = np.random.uniform(-np.pi / 2, np.pi / 2)
@@ -294,7 +293,7 @@ def safeAffineAug(spl, lbl):
         if insightRate >= 0.8:
             # plane reserved nicely
             lblResult = lblAffined
-        elif insightRate <= 0.4:
+        elif insightRate <= 0.3:
             # consider as no plane
             lblResult = np.zeros_like(lblAffined)
         else:
@@ -355,13 +354,12 @@ def gaussianNoise(src):
 class NnTrackerDataset:
     path: str
     sel: str
-    datasettype: str
 
 
 class labeldataset(torch.utils.data.Dataset):
     class AugSteps(enum.Enum):
         affine = 0
-        randLine = 1
+        rndln = 1
         autoaug = 2
         gausNoise = 3
 
@@ -373,7 +371,6 @@ class labeldataset(torch.utils.data.Dataset):
         path,
         selection,
         size,
-        pathtype="fld",
         sheetname=None,
         stdShape=None,
         augSteps=list(),
@@ -386,12 +383,10 @@ class labeldataset(torch.utils.data.Dataset):
             selection = [s for s in selection if s is not None]
             self.names = selection
             reader: ImgReader = None
-            if pathtype == "fld":
-                reader = ImgReaderFolder(path)
-            elif pathtype == "zip":
+            if UrlFullResolution.of(path).extName == ".zip":
                 reader = ImgReaderZip(path)
             else:
-                raise TypeError(f"inproper path type {pathtype}")
+                reader = ImgReaderFolder(path)
 
             items = []
             prog = Progress(len(selection))
@@ -426,7 +421,7 @@ class labeldataset(torch.utils.data.Dataset):
         if labeldataset.AugSteps.affine in self.augSteps:
             spl, lbl = safeAffineAug(spl, lbl)
 
-        if labeldataset.AugSteps.randLine in self.augSteps:
+        if labeldataset.AugSteps.rndln in self.augSteps:
             spl = draw_random_line(spl, np.random.randint(-3, 5))
 
         if labeldataset.AugSteps.autoaug in self.augSteps:

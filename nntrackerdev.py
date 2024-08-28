@@ -18,6 +18,7 @@ installLib(r"/kaggle/working", "https://github.com/Ktpls/DLOnOpdarPlaneDetection
 %cd "/kaggle/working"
 #!rm "/kaggle/working/DLOnOpdarPlaneDetection/nntracker.pth"
 """
+
 # %%
 # basics
 from predef.nntrackerdev_predef import *
@@ -69,47 +70,26 @@ model = getmodel(
 
 print("loading dataset")
 datasets = {
-    "LE2REnh": NnTrackerDataset(r"LE2REnh/LE2REnh.zip", r"LE2REnh/all.xlsx", "zip"),
-    "SmallAug": NnTrackerDataset(r"SmallAug/SmallAug.zip", r"SmallAug/all.xlsx", "zip"),
-    "largeEnoughToRecon": NnTrackerDataset(
-        r"largeEnoughToRecon/largeEnoughToRecon.zip",
-        r"largeEnoughToRecon/all.xlsx",
-        "zip",
-    ),
-    "origins_nntracker": NnTrackerDataset(
-        r"origins_nntracker/origins_nntracker.zip",
-        r"origins_nntracker/hardones.xlsx",
-        "zip",
-    ),
+    "LE2RE": NnTrackerDataset(r"LE2RE", r"LE2RE/all.xlsx"),
+    "smallAug": NnTrackerDataset(r"smallAug", r"smallAug/all.xlsx"),
+    "affined": NnTrackerDataset(r"affined", r"affined/all.xlsx"),
 }
-train_data = datasets["largeEnoughToRecon"]
+train_data = datasets["affined"]
 train_data = labeldataset().init(
     os.path.join(datasetroot, train_data.path),
     os.path.join(datasetroot, train_data.sel),
     8192,
-    train_data.datasettype,
     None,
     stdShape,
     augSteps=[
-        labeldataset.AugSteps.affine,
-        labeldataset.AugSteps.randLine,
-        labeldataset.AugSteps.autoaug,
+        # labeldataset.AugSteps.affine,
+        # labeldataset.AugSteps.rndln,
+        # labeldataset.AugSteps.autoaug,
         labeldataset.AugSteps.gausNoise,
     ],
-)
-test_data = datasets["largeEnoughToRecon"]
-test_data = labeldataset().init(
-    os.path.join(datasetroot, test_data.path),
-    os.path.join(datasetroot, test_data.sel),
-    32,
-    test_data.datasettype,
-    None,
-    stdShape,
-    augSteps=[
-        labeldataset.AugSteps.affine,
-        # labeldataset.AugSteps.gausNoise,
-    ],
-)
+) 
+test_data = datasets["affined"]
+test_data = train_data
 print("load finished")
 
 # %%
@@ -119,7 +99,7 @@ num_workers = 0
 train_dataloader = DataLoader(
     train_data, batch_size=batch_size, num_workers=num_workers
 )
-test_dataloader = DataLoader(test_data, batch_size=32, num_workers=num_workers)
+test_dataloader = DataLoader(test_data, batch_size=batch_size, num_workers=num_workers)
 
 
 # %%
@@ -127,31 +107,25 @@ test_dataloader = DataLoader(test_data, batch_size=32, num_workers=num_workers)
 
 
 def calcloss(pi, pihat):
-    (
-        isObj,
-        meanX,
-        meanY,
-        wingSpan,
-    ) = (
-        pi[:, 0],
-        pi[:, 1],
-        pi[:, 2],
-        pi[:, 3],
-    )
+    batch, dimPi = pi.shape
+    isObj = pi[:, 0].unsqueeze(1)
+    isObjHat = pihat[:, 0].unsqueeze(1)
 
-    coef = torch.ones_like(
-        pi,
-        dtype=torch.float32,
-        device=device,
-        requires_grad=False,
-    )
-    # enphasize wing span
-    coef[:, 3] = 1.5
-    # dont estimate pos and size when is no object
-    coef[isObj != 1, 1:] = 0
-    coef[isObj != 1, 0] = 4.5
-    dist = ((pihat - pi) ** 2) * coef
-    loss = torch.sum(dist)
+    coef = torch.tensor(
+        [1, 1, 1.5], dtype=torch.float32, device=device, requires_grad=False
+    ).unsqueeze(0)
+    detailMask = isObj
+    detailMse = (pihat - pi)[:, 1:] ** 2
+    detailLoss = detailMask * coef * detailMse
+
+    boolIsObj = isObj > 0.5
+    alpha = 1 - 52 / 64
+    alphat = torch.where(boolIsObj, alpha, 1 - alpha)
+    pt = torch.where(boolIsObj, isObjHat, 1 - isObjHat)
+    gamma = 2
+    classLoss = -alphat * (1 - pt) ** gamma * torch.log(pt)
+
+    loss = torch.sum(detailLoss) + torch.sum(classLoss)
     return loss
 
 

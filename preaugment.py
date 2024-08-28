@@ -8,18 +8,17 @@ dataset = labeldataset().init(
     os.path.join(datasetroot, r"largeEnoughToRecon/largeEnoughToRecon.zip"),
     os.path.join(datasetroot, r"largeEnoughToRecon/all.xlsx"),
     8192,
-    "zip",
     None,
     stdShape,
     augSteps=[
         labeldataset.AugSteps.affine,
-        labeldataset.AugSteps.randLine,
-        labeldataset.AugSteps.autoaug,
+        # labeldataset.AugSteps.rndln,
+        # labeldataset.AugSteps.autoaug,
     ],
 )
 
 destSampleNum = 8192
-dest = r"dataset\LE2REnh"
+dest = r"dataset\affined"
 destSpl = os.path.join(dest, "spl")
 destLbl = os.path.join(dest, "lbl")
 names = list()
@@ -31,10 +30,10 @@ for i in range(destSampleNum):
     item = dataset.items[index]
     item = dataset.dataAug(item)
     spl, lbl = item.spl, item.lbl
-    name = DataCollector.geneName()
-    filename = f"{name}.png"
+    # name = DataCollector.geneName()
+    filename = f"{i:05d}.png"
     names.append(filename)
-    cv.imwrite(os.path.join(destSpl, filename), spl * 255)
-    cv.imwrite(os.path.join(destLbl, filename), lbl * 255)
+    cv.imwrite(os.path.join(destSpl, filename), cv.cvtColor(spl, cv.COLOR_RGB2BGR) * 255)
+    cv.imwrite(os.path.join(destLbl, filename), cv.cvtColor(lbl, cv.COLOR_RGB2BGR) * 255)
     prog.update(i)
 save_list_to_xls(names, os.path.join(dest, "all.xlsx"))
