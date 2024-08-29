@@ -1,26 +1,26 @@
 # %%
 # installing
-import os
-import sys
+# import os
+# import sys
 
 
-def installLib(installpath, gitpath):
-    projPath = os.path.join(installpath, os.path.splitext(os.path.basename(gitpath))[0])
-    if not os.path.exists(projPath):
-        os.system(rf"git clone {gitpath} {projPath}")
-    else:
-        cwd = os.getcwd()
-        os.chdir(projPath)
-        os.system(rf"git pull")
-        os.chdir(cwd)
-    if projPath not in sys.path:
-        sys.path.append(projPath)
+# def installLib(installpath, gitpath):
+#     projPath = os.path.join(installpath, os.path.splitext(os.path.basename(gitpath))[0])
+#     if not os.path.exists(projPath):
+#         os.system(rf"git clone {gitpath} {projPath}")
+#     else:
+#         cwd = os.getcwd()
+#         os.chdir(projPath)
+#         os.system(rf"git pull")
+#         os.chdir(cwd)
+#     if projPath not in sys.path:
+#         sys.path.append(projPath)
 
 
-installLib(r"/kaggle/working", "https://github.com/Ktpls/pyinclude.git")
-installLib(r"/kaggle/working", "https://github.com/Ktpls/DLOnOpdarPlaneDetection.git")
-os.chdir(r"/kaggle/working")
-#!rm "/kaggle/working/DLOnOpdarPlaneDetection/nntracker.pth"
+# installLib(r"/kaggle/working", "https://github.com/Ktpls/pyinclude.git")
+# installLib(r"/kaggle/working", "https://github.com/Ktpls/DLOnOpdarPlaneDetection.git")
+# os.chdir(r"/kaggle/working")
+# #!rm "/kaggle/working/DLOnOpdarPlaneDetection/nntracker.pth"
 
 # %%
 # basics
@@ -38,37 +38,28 @@ else:
 # %%
 # nn def
 modelpath = r"nntracker.pth"
-model: nntracker_respi_MPn = getmodel(
+model: nntracker_respi_resnet = getmodel(
     # nntracker_pi(),
-    nntracker_respi_MPn(
-        dropout=0.5,
+    nntracker_respi_resnet(
+        dropoutp=0.5,
     ),
     modelpath,
     device,
 )
-setModuleFree(
+_ = setModuleFree(
     model.backbone,
     (
-        # "features.0",
-        # "features.1",
-        # "features.2",
-        # "features.3",
-        # "features.4",
-        # "features.5",
-        # "features.6",
-        # "features.7",
-        # "features.8",
-        # "features.9",
-        # "features.10",
-        # "features.11",
-        # "features.12",
-        "features.13",
-        "features.14",
-        "features.15",
-        "features.16",
+        "layer3.30",
+        "layer3.31",
+        "layer3.32",
+        "layer3.33",
+        "layer3.34",
+        "layer3.35",
+        "layer4.0",
+        "layer4.1",
+        "layer4.2",
     ),
 )
-os.chdir()
 # %%
 # dataset
 

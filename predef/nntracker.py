@@ -295,17 +295,15 @@ class nntracker_respi(FinalModule):
 
     def __init__(
         self,
-        loadPretrainedBackbone=True,
-        dropout=0.5,
+        dropoutp=0.5,
     ):
         super().__init__()
+        self.dropoutp = dropoutp
         weights = torchvision.models.MobileNet_V3_Large_Weights.DEFAULT
-        backbone = torchvision.models.mobilenet_v3_large(
-            weights=weights if loadPretrainedBackbone else None
-        )
+        backbone = torchvision.models.mobilenet_v3_large(weights=weights)
         self.backbone = backbone
         self.backbonepreproc = weights.transforms(antialias=True)
-        self.upsampler = torch.nn.Upsample(scale_factor=2, mode="nearest")
+        self.upsampler = torch.nn.Upsample(scale_factor=2, mode="bilinear")
 
         self.chan4Simplifier = ConvBnHs(self.chanProc4, self.chanProc4Simplified, 1)
 
@@ -359,7 +357,7 @@ class nntracker_respi(FinalModule):
                 self.last_channel,
             ),
             torch.nn.Hardswish(),
-            torch.nn.Dropout(dropout),
+            torch.nn.Dropout(dropoutp),
             torch.nn.Linear(self.last_channel, 4),
             InspFuncMixture(
                 [
@@ -480,8 +478,8 @@ class nntracker_respi(FinalModule):
 
 
 class nntracker_respi_MPn(nntracker_respi):
-    def __init__(self, freeLayers=list(), loadPretrainedBackbone=True, dropout=0.5):
-        super().__init__(freeLayers, loadPretrainedBackbone, dropout)
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
 
         self.down16to8 = torch.nn.Sequential(
             MPn(self.chanProc16),
@@ -493,8 +491,8 @@ class nntracker_respi_MPn(nntracker_respi):
 
 
 class nntracker_respi_ELAN(nntracker_respi):
-    def __init__(self, freeLayers=list(), loadPretrainedBackbone=True, dropout=0.5):
-        super().__init__(freeLayers, loadPretrainedBackbone, dropout)
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
         self.summing4And8 = torch.nn.Sequential(
             ELAN(self.chanProc8 + self.chanProc4Simplified, self.chanProc8)
         )
@@ -514,8 +512,8 @@ class nntracker_respi_ELAN(nntracker_respi):
 class nntracker_respi_spatialpositioning_head(nntracker_respi):
     last_channel = nntracker_respi.chanProc4Simplified * 2
 
-    def __init__(self, freeLayers=list(), loadPretrainedBackbone=True, dropout=0.5):
-        super().__init__(freeLayers, loadPretrainedBackbone, dropout)
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
         self.locator16 = SpatialPositioning([16, 16])
         self.locator8 = SpatialPositioning([8, 8])
         self.locator4 = SpatialPositioning([4, 4])
@@ -525,7 +523,7 @@ class nntracker_respi_spatialpositioning_head(nntracker_respi):
                 2 * (self.chanProc4Simplified + self.chanProc8 + self.chanProc16),
                 self.last_channel,
             ),
-            torch.nn.Dropout(dropout),
+            torch.nn.Dropout(self.dropoutp),
             torch.nn.Hardswish(),
             res_through(
                 torch.nn.Sequential(
@@ -533,7 +531,7 @@ class nntracker_respi_spatialpositioning_head(nntracker_respi):
                         self.last_channel,
                         self.last_channel,
                     ),
-                    torch.nn.Dropout(dropout),
+                    torch.nn.Dropout(self.dropoutp),
                     torch.nn.Hardswish(),
                 ),
                 torch.nn.Sequential(
@@ -541,7 +539,7 @@ class nntracker_respi_spatialpositioning_head(nntracker_respi):
                         self.last_channel,
                         self.last_channel,
                     ),
-                    torch.nn.Dropout(dropout),
+                    torch.nn.Dropout(self.dropoutp),
                     torch.nn.Hardswish(),
                 ),
             ),
@@ -572,11 +570,60 @@ class nntracker_respi_mnv3s(nntracker_respi):
     chanProc4Simplified = 160
     last_channel = 1024 // 2
 
-    def __init__(self, freeLayers=list(), loadPretrainedBackbone=True, dropout=0.2):
-        super().__init__(freeLayers, loadPretrainedBackbone, dropout)
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
         weights = torchvision.models.MobileNet_V3_Small_Weights.DEFAULT
-        backbone = torchvision.models.mobilenet_v3_small(
-            weights=weights if loadPretrainedBackbone else None
-        )
-        self.backbone = self.setBackboneFree(backbone, freeLayers)
+        self.backbone = torchvision.models.mobilenet_v3_small(weights=weights)
         self.backbonepreproc = weights.transforms(antialias=True)
+
+
+class nntracker_respi_resnet(nntracker_respi_MPn):
+    EXPORT_x16 = 5
+    EXPORT_x8 = 6
+    EXPORT_x4 = 7
+    chanProc16 = 512
+    chanProc8 = 1024
+    chanProc4 = 2048
+    chanProc4Simplified = 1024
+    last_channel = 1024 // 2
+
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        weights = torchvision.models.ResNet152_Weights.DEFAULT
+        self.backbone = torchvision.models.resnet152(weights=weights)
+        self.backbonepreproc = weights.transforms(antialias=True)
+
+    def fpnForward(self, x):
+        '''
+        0 torch.Size([2, 64, 64, 64])
+        1 torch.Size([2, 64, 64, 64])
+        2 torch.Size([2, 64, 64, 64])
+        3 torch.Size([2, 64, 32, 32])
+        4 torch.Size([2, 256, 32, 32])
+        5 torch.Size([2, 512, 16, 16])
+        6 torch.Size([2, 1024, 8, 8])
+        7 torch.Size([2, 2048, 4, 4])
+        '''
+        for i, m in enumerate(
+            [
+                self.backbone.conv1,
+                self.backbone.bn1,
+                self.backbone.relu,
+                self.backbone.maxpool,
+                self.backbone.layer1,
+                self.backbone.layer2,
+                self.backbone.layer3,
+                self.backbone.layer4,
+            ]
+        ):
+            x = m(x)
+            if i == self.EXPORT_x16:
+                out16 = x
+            elif i == self.EXPORT_x8:
+                out8 = x
+            elif i == self.EXPORT_x4:
+                out4 = x
+                break
+        pass
+        out4 = self.chan4Simplifier(out4)
+        return out16, out8, out4
