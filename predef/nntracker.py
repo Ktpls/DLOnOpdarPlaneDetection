@@ -295,7 +295,6 @@ class nntracker_respi(FinalModule):
 
     def __init__(
         self,
-        freeLayers=list(),
         loadPretrainedBackbone=True,
         dropout=0.5,
     ):
@@ -304,7 +303,7 @@ class nntracker_respi(FinalModule):
         backbone = torchvision.models.mobilenet_v3_large(
             weights=weights if loadPretrainedBackbone else None
         )
-        self.backbone = self.setBackboneFree(backbone, freeLayers)
+        self.backbone = backbone
         self.backbonepreproc = weights.transforms(antialias=True)
         self.upsampler = torch.nn.Upsample(scale_factor=2, mode="nearest")
 
@@ -372,14 +371,6 @@ class nntracker_respi(FinalModule):
             ),
         )
 
-    def setBackboneFree(self, backbone: torch.nn.Module, freeLayers):
-        for name, param in backbone.named_parameters():
-            if any([name.startswith(fl) for fl in freeLayers]):
-                param.requires_grad = True
-            else:
-                param.requires_grad = False
-        return backbone
-
     def fpnForward(self, x):
         for i, module in enumerate(self.backbone.features):
             x = module(x)
@@ -432,8 +423,8 @@ class nntracker_respi(FinalModule):
         samplenum = np.prod([7, 4])
         imshowconfig = {"vmin": 0, "vmax": 1}
         ps = perf_statistic()
+        prog = Progress(samplenum)
         with torch.no_grad():
-            prog = Progress(samplenum)
             for i in range(samplenum):
                 datatuple = dataset[0]
                 src, lbl, pi = datatuple
@@ -451,7 +442,6 @@ class nntracker_respi(FinalModule):
                     np.array(
                         [
                             lbl,
-                            # planeInfo2Lbl(pi, stdShape),
                             np.zeros_like(lbl),
                             planeInfo2Lbl(pihat.cpu().numpy(), stdShape),
                         ]

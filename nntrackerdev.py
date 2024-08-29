@@ -1,36 +1,39 @@
-"""
+# %%
+# installing
 import os
 import sys
+
+
 def installLib(installpath, gitpath):
     projPath = os.path.join(installpath, os.path.splitext(os.path.basename(gitpath))[0])
     if not os.path.exists(projPath):
         os.system(rf"git clone {gitpath} {projPath}")
     else:
-        %cd {projPath}
+        cwd = os.getcwd()
+        os.chdir(projPath)
         os.system(rf"git pull")
+        os.chdir(cwd)
     if projPath not in sys.path:
         sys.path.append(projPath)
-installLib(
-    r"/kaggle/working",
-    "https://github.com/Ktpls/pyinclude.git",
-)
+
+
+installLib(r"/kaggle/working", "https://github.com/Ktpls/pyinclude.git")
 installLib(r"/kaggle/working", "https://github.com/Ktpls/DLOnOpdarPlaneDetection.git")
-%cd "/kaggle/working"
+os.chdir(r"/kaggle/working")
 #!rm "/kaggle/working/DLOnOpdarPlaneDetection/nntracker.pth"
-"""
 
 # %%
 # basics
 from predef.nntrackerdev_predef import *
 
-nnt = import_or_reload("predef.nntracker")
+import_or_reload("predef.nntracker")
 from predef.nntracker import *
 
 RunOnWtUtilityEnviroment = True
 if RunOnWtUtilityEnviroment:
     datasetroot = r"dataset/"
 else:
-    datasetroot = r"/kaggle/input/nntrackerle2renh"
+    datasetroot = r"/kaggle/input/planedetectiondataset"
 
 # %%
 # nn def
@@ -38,31 +41,34 @@ modelpath = r"nntracker.pth"
 model: nntracker_respi_MPn = getmodel(
     # nntracker_pi(),
     nntracker_respi_MPn(
-        freeLayers=(
-            # "features.0",
-            # "features.1",
-            # "features.2",
-            # "features.3",
-            # "features.4",
-            # "features.5",
-            # "features.6",
-            # "features.7",
-            # "features.8",
-            # "features.9",
-            # "features.10",
-            # "features.11",
-            # "features.12",
-            "features.13",
-            "features.14",
-            "features.15",
-            "features.16",
-        ),
         dropout=0.5,
     ),
     modelpath,
     device,
 )
-
+setModuleFree(
+    model.backbone,
+    (
+        # "features.0",
+        # "features.1",
+        # "features.2",
+        # "features.3",
+        # "features.4",
+        # "features.5",
+        # "features.6",
+        # "features.7",
+        # "features.8",
+        # "features.9",
+        # "features.10",
+        # "features.11",
+        # "features.12",
+        "features.13",
+        "features.14",
+        "features.15",
+        "features.16",
+    ),
+)
+os.chdir()
 # %%
 # dataset
 
@@ -116,11 +122,11 @@ trainpipe.train(
 
 # %%
 # save
-savemodel(model, modelpath)
+model.save(modelpath)
 
 
 # %%
-# view effect
+# demo
 model.demo(train_data)
 
 
