@@ -25,7 +25,6 @@ train_data = datasets["largeEnoughToRecon"]
 train_data = labeldataset().init(
     os.path.join(datasetroot, train_data.path),
     os.path.join(datasetroot, train_data.sel),
-    8192,
     train_data.datasettype,
     None,
     stdShape,

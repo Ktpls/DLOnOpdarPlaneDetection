@@ -7,7 +7,6 @@ datasetroot = r"dataset/"
 dataset = labeldataset().init(
     os.path.join(datasetroot, r"largeEnoughToRecon/largeEnoughToRecon.zip"),
     os.path.join(datasetroot, r"largeEnoughToRecon/all.xlsx"),
-    8192,
     None,
     stdShape,
     augSteps=[

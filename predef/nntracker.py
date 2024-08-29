@@ -326,7 +326,6 @@ class nntracker_respi(FinalModule):
         self.down16to8 = torch.nn.Sequential(
             ConvBnHs(self.chanProc16, self.chanProc16, 3),
             torch.nn.MaxPool2d(2, 2),
-            # MPn(chanProc16),
         )
 
         self.proc8 = torch.nn.Sequential(
@@ -341,7 +340,6 @@ class nntracker_respi(FinalModule):
         self.down8to4 = torch.nn.Sequential(
             ConvBnHs(self.chanProc8, self.chanProc8, 3),
             torch.nn.MaxPool2d(2, 2),
-            # MPn(chanProc8),
         )
 
         self.proc4 = torch.nn.Sequential(
@@ -458,17 +456,18 @@ class nntracker_respi(FinalModule):
         batch, dimPi = pi.shape
         isObj = pi[:, 0].unsqueeze(1)
         isObjHat = pihat[:, 0].unsqueeze(1)
+        boolIsObj = isObj > 0.5
 
         coef = torch.tensor(
-            [1, 1, 1.5], dtype=torch.float32, device=device, requires_grad=False
+            [1, 1, 3], dtype=torch.float32, device=device, requires_grad=False
         ).unsqueeze(0)
-        detailMask = isObj
+        detailMask = boolIsObj.to(dtype=torch.float32)
         detailMse = (pihat - pi)[:, 1:] ** 2
         detailLoss = detailMask * coef * detailMse
 
-        boolIsObj = isObj > 0.5
-        alpha = 1 - 52 / 64  # from experiment
-        alphat = torch.where(boolIsObj, alpha, 1 - alpha)
+        # alpha = 1 - 52 / 64  # from experiment
+        # alphat = torch.where(boolIsObj, alpha, 1 - alpha)
+        alphat=1
         pt = torch.where(boolIsObj, isObjHat, 1 - isObjHat)
         gamma = 2
         classLoss = -alphat * (1 - pt) ** gamma * torch.log(pt)
@@ -589,8 +588,8 @@ class nntracker_respi_resnet(nntracker_respi_MPn):
 
     def __init__(self, *a, **kw):
         super().__init__(*a, **kw)
-        weights = torchvision.models.ResNet152_Weights.DEFAULT
-        self.backbone = torchvision.models.resnet152(weights=weights)
+        weights = torchvision.models.ResNet50_Weights.DEFAULT
+        self.backbone = torchvision.models.resnet50(weights=weights)
         self.backbonepreproc = weights.transforms(antialias=True)
 
     def fpnForward(self, x):
@@ -617,6 +616,7 @@ class nntracker_respi_resnet(nntracker_respi_MPn):
             ]
         ):
             x = m(x)
+            # print(i, x.shape)
             if i == self.EXPORT_x16:
                 out16 = x
             elif i == self.EXPORT_x8:
@@ -624,6 +624,5 @@ class nntracker_respi_resnet(nntracker_respi_MPn):
             elif i == self.EXPORT_x4:
                 out4 = x
                 break
-        pass
         out4 = self.chan4Simplifier(out4)
         return out16, out8, out4

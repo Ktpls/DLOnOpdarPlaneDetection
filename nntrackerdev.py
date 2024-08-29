@@ -49,12 +49,12 @@ model: nntracker_respi_resnet = getmodel(
 _ = setModuleFree(
     model.backbone,
     (
-        "layer3.30",
-        "layer3.31",
-        "layer3.32",
-        "layer3.33",
-        "layer3.34",
-        "layer3.35",
+        # "layer3.0",
+        # "layer3.1",
+        # "layer3.2",
+        # "layer3.3",
+        "layer3.4",
+        "layer3.5",
         "layer4.0",
         "layer4.1",
         "layer4.2",
@@ -74,14 +74,13 @@ train_data = datasets["smallAug"]
 train_data = labeldataset().init(
     path=os.path.join(datasetroot, train_data.path),
     selection=os.path.join(datasetroot, train_data.sel),
-    size=8192,
     stdShape=stdShape,
     device=device,
     augSteps=[
         # labeldataset.AugSteps.affine,
         # labeldataset.AugSteps.rndln,
         # labeldataset.AugSteps.autoaug,
-        labeldataset.AugSteps.gausNoise,
+        # labeldataset.AugSteps.gausNoise,
     ],
 )
 print("load finished")
@@ -119,10 +118,6 @@ model.save(modelpath)
 # %%
 # demo
 model.demo(train_data)
-
-
-# %%
-os.system("pause")
 
 
 # %%

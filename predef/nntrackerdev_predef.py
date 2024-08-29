@@ -373,13 +373,11 @@ class labeldataset(torch.utils.data.Dataset):
         self,
         path,
         selection,
-        size,
         sheetname=None,
         device="cpu",
         stdShape=None,
         augSteps=list(),
     ):
-        self.size = size
         self.augSteps = {s: True for s in augSteps}
         if selection is not None:
             selection = Xls2ListList(selection, sheetname)
@@ -447,8 +445,7 @@ class labeldataset(torch.utils.data.Dataset):
         )
 
     def __getitem__(self, idx):
-        index = self.rndIndex()
-        item = self.items[index]
+        item = self.items[idx]
         item = self.dataAug(item)
         tup = self.procItemToTensor(item)
         return tup
