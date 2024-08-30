@@ -416,7 +416,7 @@ class labeldataset(torch.utils.data.Dataset):
         return self
 
     def __len__(self):
-        return self.size
+        return len(self.items)
 
     def dataAug(self, item: SampleItem):
         spl, lbl = item.spl, item.lbl

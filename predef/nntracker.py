@@ -412,7 +412,7 @@ class nntracker_respi(FinalModule):
         return loss
 
     def inferenceProgress(self, src):
-        return self.forward(src.unsqueeze(0)).squeeze(0)
+        return self.forward(src)
 
     def demo(self, dataset: labeldataset):
         mpp = MassivePicturePlot([7, 8])
@@ -420,13 +420,19 @@ class nntracker_respi(FinalModule):
         imshowconfig = {"vmin": 0, "vmax": 1}
         ps = perf_statistic()
         prog = Progress(samplenum)
+        dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
         with torch.no_grad():
             for i in range(samplenum):
-                datatuple = dataset[0]
+                for datatuple in dataloader:
+                    break
                 src, lbl, pi = datatuple
                 ps.start()
                 pihat = self.inferenceProgress(src)
                 ps.stop().countcycle()
+                pi = pi.squeeze(0).cpu().numpy()
+                pihat = pihat.squeeze(0).cpu().numpy()
+                src = src.squeeze(0)
+                lbl = lbl.squeeze(0)
                 src, lbl = [tensorimg2ndarray(d) for d in [src, lbl]]
 
                 mpp.toNextPlot()
@@ -439,7 +445,7 @@ class nntracker_respi(FinalModule):
                         [
                             lbl,
                             np.zeros_like(lbl),
-                            planeInfo2Lbl(pihat.cpu().numpy(), stdShape),
+                            planeInfo2Lbl(pihat, stdShape),
                         ]
                     )
                     .squeeze(-1)
@@ -464,15 +470,16 @@ class nntracker_respi(FinalModule):
         detailMask = boolIsObj.to(dtype=torch.float32)
         detailMse = (pihat - pi)[:, 1:] ** 2
         detailLoss = detailMask * coef * detailMse
+        detailLoss = torch.sum(detailLoss, dim=-1, keepdim=True)
 
         # alpha = 1 - 52 / 64  # from experiment
         # alphat = torch.where(boolIsObj, alpha, 1 - alpha)
-        alphat=1
+        alphat = 1
         pt = torch.where(boolIsObj, isObjHat, 1 - isObjHat)
-        gamma = 2
+        gamma = 1
         classLoss = -alphat * (1 - pt) ** gamma * torch.log(pt)
 
-        loss = torch.sum(detailLoss) + torch.sum(classLoss)
+        loss = torch.mean(5 * detailLoss + classLoss)
         return loss
 
 
@@ -509,7 +516,7 @@ class nntracker_respi_ELAN(nntracker_respi):
 
 
 class nntracker_respi_spatialpositioning_head(nntracker_respi):
-    last_channel = nntracker_respi.chanProc4Simplified * 2
+    last_channel = nntracker_respi.chanProc4Simplified
 
     def __init__(self, *a, **kw):
         super().__init__(*a, **kw)
@@ -524,25 +531,33 @@ class nntracker_respi_spatialpositioning_head(nntracker_respi):
             ),
             torch.nn.Dropout(self.dropoutp),
             torch.nn.Hardswish(),
-            res_through(
-                torch.nn.Sequential(
-                    torch.nn.Linear(
-                        self.last_channel,
-                        self.last_channel,
-                    ),
-                    torch.nn.Dropout(self.dropoutp),
-                    torch.nn.Hardswish(),
-                ),
-                torch.nn.Sequential(
-                    torch.nn.Linear(
-                        self.last_channel,
-                        self.last_channel,
-                    ),
-                    torch.nn.Dropout(self.dropoutp),
-                    torch.nn.Hardswish(),
-                ),
-            ),
+            # res_through(
+            #     torch.nn.Sequential(
+            #         torch.nn.Linear(
+            #             self.last_channel,
+            #             self.last_channel,
+            #         ),
+            #         torch.nn.Dropout(self.dropoutp),
+            #         torch.nn.Hardswish(),
+            #     ),
+            #     torch.nn.Sequential(
+            #         torch.nn.Linear(
+            #             self.last_channel,
+            #             self.last_channel,
+            #         ),
+            #         torch.nn.Dropout(self.dropoutp),
+            #         torch.nn.Hardswish(),
+            #     ),
+            # ),
             torch.nn.Linear(self.last_channel, 4),
+            InspFuncMixture(
+                [
+                    torch.sigmoid,
+                    torch.nn.functional.hardswish,
+                    torch.nn.functional.hardswish,
+                    torch.nn.functional.hardswish,
+                ]
+            ),
         )
 
     def headForward(self, sum16, sum8, sum4):
@@ -580,29 +595,29 @@ class nntracker_respi_resnet(nntracker_respi_MPn):
     EXPORT_x16 = 5
     EXPORT_x8 = 6
     EXPORT_x4 = 7
-    chanProc16 = 512
-    chanProc8 = 1024
-    chanProc4 = 2048
-    chanProc4Simplified = 1024
-    last_channel = 1024 // 2
+    chanProc16 = 128
+    chanProc8 = 256
+    chanProc4 = 512
+    chanProc4Simplified = 256
+    last_channel = 512
 
     def __init__(self, *a, **kw):
         super().__init__(*a, **kw)
-        weights = torchvision.models.ResNet50_Weights.DEFAULT
-        self.backbone = torchvision.models.resnet50(weights=weights)
+        weights = torchvision.models.ResNet18_Weights.DEFAULT
+        self.backbone = torchvision.models.resnet18(weights=weights)
         self.backbonepreproc = weights.transforms(antialias=True)
 
     def fpnForward(self, x):
-        '''
+        """
         0 torch.Size([2, 64, 64, 64])
         1 torch.Size([2, 64, 64, 64])
         2 torch.Size([2, 64, 64, 64])
         3 torch.Size([2, 64, 32, 32])
-        4 torch.Size([2, 256, 32, 32])
-        5 torch.Size([2, 512, 16, 16])
-        6 torch.Size([2, 1024, 8, 8])
-        7 torch.Size([2, 2048, 4, 4])
-        '''
+        4 torch.Size([2, 64, 32, 32])
+        5 torch.Size([2, 128, 16, 16])
+        6 torch.Size([2, 256, 8, 8])
+        7 torch.Size([2, 512, 4, 4])
+        """
         for i, m in enumerate(
             [
                 self.backbone.conv1,

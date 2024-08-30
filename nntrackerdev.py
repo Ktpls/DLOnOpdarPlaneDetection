@@ -38,10 +38,9 @@ else:
 # %%
 # nn def
 modelpath = r"nntracker.pth"
-model: nntracker_respi_resnet = getmodel(
-    # nntracker_pi(),
-    nntracker_respi_resnet(
-        dropoutp=0.5,
+model: nntracker_respi_spatialpositioning_head = getmodel(
+    nntracker_respi_spatialpositioning_head(
+        dropoutp=0,
     ),
     modelpath,
     device,
@@ -50,14 +49,9 @@ _ = setModuleFree(
     model.backbone,
     (
         # "layer3.0",
-        # "layer3.1",
-        # "layer3.2",
-        # "layer3.3",
-        "layer3.4",
-        "layer3.5",
+        "layer3.1",
         "layer4.0",
         "layer4.1",
-        "layer4.2",
     ),
 )
 # %%
@@ -70,7 +64,7 @@ datasets = {
     "smallAug": NnTrackerDataset(r"smallAug", r"smallAug/all.xlsx"),
     "affined": NnTrackerDataset(r"affined", r"affined/all.xlsx"),
 }
-train_data = datasets["smallAug"]
+train_data = datasets["affined"]
 train_data = labeldataset().init(
     path=os.path.join(datasetroot, train_data.path),
     selection=os.path.join(datasetroot, train_data.sel),
@@ -88,10 +82,7 @@ print("load finished")
 # %%
 # dataloader
 batch_size = 2
-num_workers = 0
-train_dataloader = DataLoader(
-    train_data, batch_size=batch_size, num_workers=num_workers
-)
+train_dataloader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
 
 # %%
 # train
