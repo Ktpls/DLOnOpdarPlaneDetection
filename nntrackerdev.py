@@ -16,7 +16,6 @@
 #     if projPath not in sys.path:
 #         sys.path.append(projPath)
 
-
 # installLib(r"/kaggle/working", "https://github.com/Ktpls/pyinclude.git")
 # installLib(r"/kaggle/working", "https://github.com/Ktpls/DLOnOpdarPlaneDetection.git")
 # os.chdir(r"/kaggle/working")
@@ -54,10 +53,9 @@ _ = setModuleFree(
         "layer4.1",
     ),
 )
+
 # %%
 # dataset
-
-
 print("loading dataset")
 datasets = {
     "LE2RE": NnTrackerDataset(r"LE2RE", r"LE2RE/all.xlsx"),
@@ -86,8 +84,6 @@ train_dataloader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
 
 # %%
 # train
-
-
 trainpipe.train(
     train_dataloader,
     torch.optim.AdamW(
@@ -100,15 +96,12 @@ trainpipe.train(
     outputperbatchnum=1000,
 )
 
-
 # %%
 # save
 model.save(modelpath)
 
-
 # %%
 # demo
 model.demo(train_data)
-
 
 # %%

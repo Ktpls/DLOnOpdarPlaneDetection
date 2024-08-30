@@ -138,19 +138,19 @@ class ELAN(torch.nn.Module):
         outHalf = out_channels // 2
         self.wayComplex = torch.nn.ModuleList(
             [
-                ConvBnHs(in_channels, outHalf, 3),
+                ConvGnHs(in_channels, outHalf, 3),
                 torch.nn.Sequential(
-                    ConvBnHs(outHalf, outHalf, 3),
-                    ConvBnHs(outHalf, outHalf, 3),
+                    ConvGnHs(outHalf, outHalf, 3),
+                    ConvGnHs(outHalf, outHalf, 3),
                 ),
                 torch.nn.Sequential(
-                    ConvBnHs(outHalf, outHalf, 3),
-                    ConvBnHs(outHalf, outHalf, 3),
+                    ConvGnHs(outHalf, outHalf, 3),
+                    ConvGnHs(outHalf, outHalf, 3),
                 ),
             ]
         )
-        self.waySimple = ConvBnHs(in_channels, outHalf, 3)
-        self.combiner = ConvBnHs(out_channels * 2, out_channels, 1)
+        self.waySimple = ConvGnHs(in_channels, outHalf, 3)
+        self.combiner = ConvGnHs(out_channels * 2, out_channels, 1)
 
     def forward(self, x):
         o_simp = self.waySimple(x)
@@ -179,14 +179,14 @@ class ELAN_H(torch.nn.Module):
         outHalf = out_channels // 2
         outQuad = out_channels // 4
         self.wayComplex = torch.nn.ModuleList(
-            ConvBnHs(in_channels, outHalf, 3),
-            ConvBnHs(outHalf, outQuad, 3),
-            ConvBnHs(outQuad, outQuad, 3),
-            ConvBnHs(outQuad, outQuad, 3),
-            ConvBnHs(outQuad, outQuad, 3),
+            ConvGnHs(in_channels, outHalf, 3),
+            ConvGnHs(outHalf, outQuad, 3),
+            ConvGnHs(outQuad, outQuad, 3),
+            ConvGnHs(outQuad, outQuad, 3),
+            ConvGnHs(outQuad, outQuad, 3),
         )
-        self.waySimple = ConvBnHs(in_channels, outHalf, 3)
-        self.combiner = ConvBnHs(out_channels * 2, out_channels, 1)
+        self.waySimple = ConvGnHs(in_channels, outHalf, 3)
+        self.combiner = ConvGnHs(out_channels * 2, out_channels, 1)
 
     def forward(self, x):
         o_simp = self.waySimple(x)
@@ -220,19 +220,13 @@ class MPn(torch.nn.Module):
         cPath = out_channels // 2
         self.wayPooling = torch.nn.Sequential(
             torch.nn.MaxPool2d(downSamplingStride, downSamplingStride),
-            ConvBnHs(in_channels, cPath, 3),
+            ConvGnHs(in_channels, cPath),
         )
         self.wayConv = torch.nn.Sequential(
-            ConvBnHs(in_channels, cPath, 1),
-            ConvBnHs(
-                cPath,
-                cPath,
-                kernel_size=3,
-                stride=downSamplingStride,
-                padding=1,
-            ),
+            ConvGnHs(in_channels, cPath, kernel_size=1),
+            ConvGnHs(cPath, cPath, stride=downSamplingStride, padding=1),
         )
-        self.combiner = ConvBnHs(cPath * 2, out_channels, 3)
+        self.combiner = ConvGnHs(cPath * 2, out_channels)
 
     def forward(self, x):
         o_pool = self.wayPooling(x)
@@ -282,15 +276,36 @@ class InspFuncMixture(torch.nn.Module):
         return result
 
 
+class Neck(torch.nn.Module):
+    def __init__(
+        self,
+        conv4,
+        conv8,
+        conv16,
+        down16to8,
+        conv8_2,
+        down8to4,
+        conv4_2,
+    ):
+        super().__init__()
+        self.conv4 = conv4
+        self.conv8 = conv8
+        self.conv16 = conv16
+        self.down16to8 = down16to8
+        self.conv8_2 = conv8_2
+        self.down8to4 = down8to4
+        self.conv4_2 = conv4_2
+
+
 class nntracker_respi(FinalModule):
     # mobile net v3 large
-    EXPORT_x16 = 6
-    EXPORT_x8 = 12
-    EXPORT_x4 = 15
-    chanProc16 = 40
-    chanProc8 = 112
-    chanProc4 = 160
-    chanProc4Simplified = 160
+    export16 = 6
+    export8 = 12
+    export4 = 15
+    chan16 = 40
+    chan8 = 112
+    chan4 = 160
+    chan4Simp = 160
     last_channel = 1280 // 2
 
     def __init__(
@@ -302,56 +317,37 @@ class nntracker_respi(FinalModule):
         weights = torchvision.models.MobileNet_V3_Large_Weights.DEFAULT
         backbone = torchvision.models.mobilenet_v3_large(weights=weights)
         self.backbone = backbone
+        self.chan4Simplifier = ConvGnHs(self.chan4, self.chan4Simp, kernel_size=1)
         self.backbonepreproc = weights.transforms(antialias=True)
+
         self.upsampler = torch.nn.Upsample(scale_factor=2, mode="bilinear")
+        self.concater = ModuleFunc(lambda x: torch.concat(x, dim=-3))
 
-        self.chan4Simplifier = ConvBnHs(self.chanProc4, self.chanProc4Simplified, 1)
-
-        self.summing4And8 = torch.nn.Sequential(
-            ConvBnHs(
-                self.chanProc8 + self.chanProc4Simplified,
-                self.chanProc8,
-                3,
-            )
-        )
-
-        self.proc16 = torch.nn.Sequential(
-            ConvBnHs(
-                self.chanProc16 + self.chanProc8,
-                self.chanProc16,
-                3,
-            )
-        )
-
-        self.down16to8 = torch.nn.Sequential(
-            ConvBnHs(self.chanProc16, self.chanProc16, 3),
-            torch.nn.MaxPool2d(2, 2),
-        )
-
-        self.proc8 = torch.nn.Sequential(
-            ConvBnHs(
-                self.chanProc16 + self.chanProc8,
-                self.chanProc8,
-                3,
+        self.neck = Neck(
+            conv4=ConvGnHs(self.chan4, self.chan4),
+            conv8=torch.nn.Sequential(
+                ConvGnHs(self.chan8 + self.chan4, self.chan8),
+                ConvGnHs(self.chan8, self.chan8),
             ),
-            ConvBnHs(self.chanProc8, self.chanProc8, 3),
-        )
-
-        self.down8to4 = torch.nn.Sequential(
-            ConvBnHs(self.chanProc8, self.chanProc8, 3),
-            torch.nn.MaxPool2d(2, 2),
-        )
-
-        self.proc4 = torch.nn.Sequential(
-            ConvBnHs(
-                self.chanProc8 + self.chanProc4Simplified, self.chanProc4Simplified, 3
+            conv16=torch.nn.Sequential(
+                ConvGnHs(self.chan16 + self.chan8, self.chan16),
+                ConvGnHs(self.chan16, self.chan16),
             ),
-            ConvBnHs(self.chanProc4Simplified, self.chanProc4Simplified, 3),
+            down16to8=torch.nn.Sequential(
+                ConvGnHs(self.chan16, self.chan16),
+                torch.nn.MaxPool2d(2, 2),
+            ),
+            conv8_2=ConvGnHs(self.chan16 + self.chan8, self.chan8),
+            down8to4=torch.nn.Sequential(
+                ConvGnHs(self.chan8, self.chan8),
+                torch.nn.MaxPool2d(2, 2),
+            ),
+            conv4_2=ConvGnHs(self.chan8 + self.chan4, self.chan4),
         )
 
         self.discriminatorFinal = torch.nn.Sequential(
             torch.nn.Linear(
-                self.chanProc4Simplified + self.chanProc8 + self.chanProc16,
+                self.chan4Simp + self.chan8 + self.chan16,
                 self.last_channel,
             ),
             torch.nn.Hardswish(),
@@ -370,22 +366,37 @@ class nntracker_respi(FinalModule):
     def fpnForward(self, x):
         for i, module in enumerate(self.backbone.features):
             x = module(x)
-            if i == self.EXPORT_x16:
+            if i == self.export16:
                 out16 = x
-            elif i == self.EXPORT_x8:
+            elif i == self.export8:
                 out8 = x
-            elif i == self.EXPORT_x4:
+            elif i == self.export4:
                 out4 = x
                 break
         out4 = self.chan4Simplifier(out4)
         return out16, out8, out4
 
-    def neckForward(self, out16, out8, out4):
-        summed = self.summing4And8(torch.concat([out8, self.upsampler(out4)], dim=1))
-        sum16 = self.proc16(torch.concat([out16, self.upsampler(summed)], dim=1))
-        sum8 = self.proc8(torch.concat([summed, self.down16to8(sum16)], dim=1))
-        sum4 = self.proc4(torch.concat([out4, self.down8to4(sum8)], dim=1))
-        return sum16, sum8, sum4
+    def neckForward(self, o16, o8, o4):
+        x = o4
+        x = self.neck.conv4(x)
+        m4 = x
+        x = self.upsampler(x)
+        x = self.concater([x, o8])
+        x = self.neck.conv8(x)
+        m8 = x
+        x = self.upsampler(x)
+        x = self.concater([x, o16])
+        x = self.neck.conv16(x)
+        o16 = x
+        x = self.neck.down16to8(x)
+        x = self.concater([x, m8])
+        x = self.neck.conv8_2(x)
+        o8 = x
+        x = self.neck.down8to4(x)
+        x = self.concater([x, m4])
+        x = self.neck.conv4_2(x)
+        o4 = x
+        return o16, o8, o4
 
     def headForward(self, sum16, sum8, sum4):
         pathes = [sum4, sum8, sum16]
@@ -415,12 +426,14 @@ class nntracker_respi(FinalModule):
         return self.forward(src)
 
     def demo(self, dataset: labeldataset):
-        mpp = MassivePicturePlot([7, 8])
+        figDemo = plt.figure(figsize=(20, 20))
+        mpp = MassivePicturePlot([7, 8], fig=figDemo)
         samplenum = np.prod([7, 4])
         imshowconfig = {"vmin": 0, "vmax": 1}
         ps = perf_statistic()
         prog = Progress(samplenum)
         dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
+        loss = list()
         with torch.no_grad():
             for i in range(samplenum):
                 for datatuple in dataloader:
@@ -429,6 +442,7 @@ class nntracker_respi(FinalModule):
                 ps.start()
                 pihat = self.inferenceProgress(src)
                 ps.stop().countcycle()
+                loss.append(self.calcloss(pi, pihat).item())
                 pi = pi.squeeze(0).cpu().numpy()
                 pihat = pihat.squeeze(0).cpu().numpy()
                 src = src.squeeze(0)
@@ -457,6 +471,15 @@ class nntracker_respi(FinalModule):
                 prog.update(i)
             prog.setFinish()
 
+        loss = np.array(loss)
+        figStatistics = plt.figure()
+        plt.hist(loss, bins=30, color="blue", edgecolor="black")
+        plt.xlabel("Loss Value")
+        plt.ylabel("Frequency")
+        plt.title("Loss Distribution")
+        print(f"aveLoss={np.mean(loss)}")
+        print(f"stdErr={np.std(loss)}")
+
     def calcloss(self, pi: torch.Tensor, pihat: torch.Tensor):
         device = pihat.device
         batch, dimPi = pi.shape
@@ -465,7 +488,7 @@ class nntracker_respi(FinalModule):
         boolIsObj = isObj > 0.5
 
         coef = torch.tensor(
-            [1, 1, 3], dtype=torch.float32, device=device, requires_grad=False
+            [1, 1, 2], dtype=torch.float32, device=device, requires_grad=False
         ).unsqueeze(0)
         detailMask = boolIsObj.to(dtype=torch.float32)
         detailMse = (pihat - pi)[:, 1:] ** 2
@@ -476,7 +499,7 @@ class nntracker_respi(FinalModule):
         # alphat = torch.where(boolIsObj, alpha, 1 - alpha)
         alphat = 1
         pt = torch.where(boolIsObj, isObjHat, 1 - isObjHat)
-        gamma = 1
+        gamma = 2
         classLoss = -alphat * (1 - pt) ** gamma * torch.log(pt)
 
         loss = torch.mean(5 * detailLoss + classLoss)
@@ -486,37 +509,12 @@ class nntracker_respi(FinalModule):
 class nntracker_respi_MPn(nntracker_respi):
     def __init__(self, *a, **kw):
         super().__init__(*a, **kw)
-
-        self.down16to8 = torch.nn.Sequential(
-            MPn(self.chanProc16),
-        )
-
-        self.down8to4 = torch.nn.Sequential(
-            MPn(self.chanProc8),
-        )
+        self.neck.down16to8 = MPn(self.chan16)
+        self.neck.down8to4 = MPn(self.chan8)
 
 
-class nntracker_respi_ELAN(nntracker_respi):
-    def __init__(self, *a, **kw):
-        super().__init__(*a, **kw)
-        self.summing4And8 = torch.nn.Sequential(
-            ELAN(self.chanProc8 + self.chanProc4Simplified, self.chanProc8)
-        )
-        self.proc16 = torch.nn.Sequential(
-            ELAN(self.chanProc16 + self.chanProc8, self.chanProc16)
-        )
-        self.proc8 = torch.nn.Sequential(
-            ELAN(self.chanProc16 + self.chanProc8, self.chanProc8),
-            ELAN(self.chanProc8, self.chanProc8),
-        )
-        self.proc4 = torch.nn.Sequential(
-            ELAN(self.chanProc8 + self.chanProc4Simplified, self.chanProc4Simplified),
-            ELAN(self.chanProc4Simplified, self.chanProc4Simplified),
-        )
-
-
-class nntracker_respi_spatialpositioning_head(nntracker_respi):
-    last_channel = nntracker_respi.chanProc4Simplified
+class nntracker_respi_spatialpositioning_head(nntracker_respi_MPn):
+    last_channel = nntracker_respi.chan4Simp
 
     def __init__(self, *a, **kw):
         super().__init__(*a, **kw)
@@ -526,7 +524,7 @@ class nntracker_respi_spatialpositioning_head(nntracker_respi):
 
         self.discriminatorFinal = torch.nn.Sequential(
             torch.nn.Linear(
-                2 * (self.chanProc4Simplified + self.chanProc8 + self.chanProc16),
+                2 * (self.chan4Simp + self.chan8 + self.chan16),  # 2 for [x, y]
                 self.last_channel,
             ),
             torch.nn.Dropout(self.dropoutp),
@@ -575,13 +573,13 @@ class nntracker_respi_spatialpositioning_head(nntracker_respi):
 
 class nntracker_respi_mnv3s(nntracker_respi):
     # mobile net v3 small
-    EXPORT_x16 = 3
-    EXPORT_x8 = 8
-    EXPORT_x4 = 11
-    chanProc16 = 24
-    chanProc8 = 48
-    chanProc4 = 96
-    chanProc4Simplified = 160
+    export16 = 3
+    export8 = 8
+    export4 = 11
+    chan16 = 24
+    chan8 = 48
+    chan4 = 96
+    chan4Simp = 160
     last_channel = 1024 // 2
 
     def __init__(self, *a, **kw):
@@ -592,13 +590,13 @@ class nntracker_respi_mnv3s(nntracker_respi):
 
 
 class nntracker_respi_resnet(nntracker_respi_MPn):
-    EXPORT_x16 = 5
-    EXPORT_x8 = 6
-    EXPORT_x4 = 7
-    chanProc16 = 128
-    chanProc8 = 256
-    chanProc4 = 512
-    chanProc4Simplified = 256
+    export16 = 5
+    export8 = 6
+    export4 = 7
+    chan16 = 128
+    chan8 = 256
+    chan4 = 512
+    chan4Simp = 256
     last_channel = 512
 
     def __init__(self, *a, **kw):
@@ -632,11 +630,11 @@ class nntracker_respi_resnet(nntracker_respi_MPn):
         ):
             x = m(x)
             # print(i, x.shape)
-            if i == self.EXPORT_x16:
+            if i == self.export16:
                 out16 = x
-            elif i == self.EXPORT_x8:
+            elif i == self.export8:
                 out8 = x
-            elif i == self.EXPORT_x4:
+            elif i == self.export4:
                 out4 = x
                 break
         out4 = self.chan4Simplifier(out4)
