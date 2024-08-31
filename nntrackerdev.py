@@ -37,8 +37,8 @@ else:
 # %%
 # nn def
 modelpath = r"nntracker.pth"
-model: nntracker_respi_spatialpositioning_head = getmodel(
-    nntracker_respi_spatialpositioning_head(
+model: nntracker_respi = getmodel(
+    nntracker_respi_mnv3s(
         dropoutp=0,
     ),
     modelpath,
@@ -47,10 +47,10 @@ model: nntracker_respi_spatialpositioning_head = getmodel(
 _ = setModuleFree(
     model.backbone,
     (
-        # "layer3.0",
-        "layer3.1",
-        "layer4.0",
-        "layer4.1",
+        "features.9",
+        "features.10",
+        "features.11",
+        "features.12",
     ),
 )
 
@@ -61,8 +61,12 @@ datasets = {
     "LE2RE": NnTrackerDataset(r"LE2RE", r"LE2RE/all.xlsx"),
     "smallAug": NnTrackerDataset(r"smallAug", r"smallAug/all.xlsx"),
     "affined": NnTrackerDataset(r"affined", r"affined/all.xlsx"),
+    "testset": NnTrackerDataset(r"testset", r"testset/all.xlsx"),
+    "largeEnoughToRecon": NnTrackerDataset(
+        r"largeEnoughToRecon/largeEnoughToRecon.zip", r"largeEnoughToRecon/all.xlsx"
+    ),
 }
-train_data = datasets["affined"]
+train_data = datasets["LE2RE"]
 train_data = labeldataset().init(
     path=os.path.join(datasetroot, train_data.path),
     selection=os.path.join(datasetroot, train_data.sel),
@@ -75,11 +79,19 @@ train_data = labeldataset().init(
         # labeldataset.AugSteps.gausNoise,
     ],
 )
+test_data = datasets["largeEnoughToRecon"]
+test_data = labeldataset().init(
+    path=os.path.join(datasetroot, test_data.path),
+    selection=os.path.join(datasetroot, test_data.sel),
+    stdShape=stdShape,
+    device=device,
+    augSteps=[],
+)
 print("load finished")
 
 # %%
 # dataloader
-batch_size = 2
+batch_size = 4
 train_dataloader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
 
 # %%
@@ -93,7 +105,7 @@ trainpipe.train(
     ),
     lambda *p: model.trainprogress(*p),
     epochnum=10,
-    outputperbatchnum=1000,
+    outputperbatchnum=500,
 )
 
 # %%

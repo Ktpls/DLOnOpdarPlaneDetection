@@ -299,13 +299,10 @@ class Neck(torch.nn.Module):
 
 class nntracker_respi(FinalModule):
     # mobile net v3 large
-    export16 = 6
-    export8 = 12
-    export4 = 15
     chan16 = 40
     chan8 = 112
+    chan4c = 160
     chan4 = 160
-    chan4Simp = 160
     last_channel = 1280 // 2
 
     def __init__(
@@ -317,7 +314,7 @@ class nntracker_respi(FinalModule):
         weights = torchvision.models.MobileNet_V3_Large_Weights.DEFAULT
         backbone = torchvision.models.mobilenet_v3_large(weights=weights)
         self.backbone = backbone
-        self.chan4Simplifier = ConvGnHs(self.chan4, self.chan4Simp, kernel_size=1)
+        self.chan4Simplifier = ConvGnHs(self.chan4c, self.chan4, kernel_size=1)
         self.backbonepreproc = weights.transforms(antialias=True)
 
         self.upsampler = torch.nn.Upsample(scale_factor=2, mode="bilinear")
@@ -347,7 +344,7 @@ class nntracker_respi(FinalModule):
 
         self.discriminatorFinal = torch.nn.Sequential(
             torch.nn.Linear(
-                self.chan4Simp + self.chan8 + self.chan16,
+                self.chan4 + self.chan8 + self.chan16,
                 self.last_channel,
             ),
             torch.nn.Hardswish(),
@@ -364,13 +361,16 @@ class nntracker_respi(FinalModule):
         )
 
     def fpnForward(self, x):
+        export16 = 6
+        export8 = 12
+        export4 = 15
         for i, module in enumerate(self.backbone.features):
             x = module(x)
-            if i == self.export16:
+            if i == export16:
                 out16 = x
-            elif i == self.export8:
+            elif i == export8:
                 out8 = x
-            elif i == self.export4:
+            elif i == export4:
                 out4 = x
                 break
         out4 = self.chan4Simplifier(out4)
@@ -427,8 +427,9 @@ class nntracker_respi(FinalModule):
 
     def demo(self, dataset: labeldataset):
         figDemo = plt.figure(figsize=(20, 20))
-        mpp = MassivePicturePlot([7, 8], fig=figDemo)
-        samplenum = np.prod([7, 4])
+        plotShape = [7, 8]
+        mpp = MassivePicturePlot(plotShape, fig=figDemo)
+        samplenum = np.prod(plotShape)
         imshowconfig = {"vmin": 0, "vmax": 1}
         ps = perf_statistic()
         prog = Progress(samplenum)
@@ -449,29 +450,35 @@ class nntracker_respi(FinalModule):
                 lbl = lbl.squeeze(0)
                 src, lbl = [tensorimg2ndarray(d) for d in [src, lbl]]
 
-                mpp.toNextPlot()
-                plt.title(PI2Str(pi))
-                plt.imshow(src)
+                # mpp.toNextPlot()
+                # plt.title(PI2Str(pi))
+                # plt.imshow(src)
 
                 mpp.toNextPlot()
-                lblComparasion = (
-                    np.array(
+                lblRebuild = planeInfo2Lbl(pihat, stdShape)
+                zeroLikeLbl = np.zeros_like(lblRebuild)
+                mixture = np.where(
+                    lblRebuild > 0.5,
+                    0.7 * src
+                    + 0.3
+                    * np.concatenate(
                         [
-                            lbl,
-                            np.zeros_like(lbl),
-                            planeInfo2Lbl(pihat, stdShape),
-                        ]
-                    )
-                    .squeeze(-1)
-                    .transpose([1, 2, 0])
+                            lblRebuild,
+                            zeroLikeLbl,
+                            zeroLikeLbl,
+                        ],
+                        axis=-1,
+                    ),
+                    src,
                 )
 
                 plt.title(PI2Str(pihat))
-                plt.imshow(lblComparasion, label="lblComparasion", **imshowconfig)
+                plt.imshow(mixture, label="lblComparasion", **imshowconfig)
                 prog.update(i)
             prog.setFinish()
 
         loss = np.array(loss)
+        loss = np.sort(loss)
         figStatistics = plt.figure()
         plt.hist(loss, bins=30, color="blue", edgecolor="black")
         plt.xlabel("Loss Value")
@@ -479,6 +486,7 @@ class nntracker_respi(FinalModule):
         plt.title("Loss Distribution")
         print(f"aveLoss={np.mean(loss)}")
         print(f"stdErr={np.std(loss)}")
+        print(f"95%quantile={loss[int(len(loss) * 0.95 + 0.5)]}")
 
     def calcloss(self, pi: torch.Tensor, pihat: torch.Tensor):
         device = pihat.device
@@ -502,7 +510,7 @@ class nntracker_respi(FinalModule):
         gamma = 2
         classLoss = -alphat * (1 - pt) ** gamma * torch.log(pt)
 
-        loss = torch.mean(5 * detailLoss + classLoss)
+        loss = torch.mean(1 * detailLoss + classLoss)
         return loss
 
 
@@ -514,7 +522,7 @@ class nntracker_respi_MPn(nntracker_respi):
 
 
 class nntracker_respi_spatialpositioning_head(nntracker_respi_MPn):
-    last_channel = nntracker_respi.chan4Simp
+    last_channel = nntracker_respi.chan4
 
     def __init__(self, *a, **kw):
         super().__init__(*a, **kw)
@@ -524,7 +532,7 @@ class nntracker_respi_spatialpositioning_head(nntracker_respi_MPn):
 
         self.discriminatorFinal = torch.nn.Sequential(
             torch.nn.Linear(
-                2 * (self.chan4Simp + self.chan8 + self.chan16),  # 2 for [x, y]
+                2 * (self.chan4 + self.chan8 + self.chan16),  # 2 for [x, y]
                 self.last_channel,
             ),
             torch.nn.Dropout(self.dropoutp),
@@ -571,32 +579,41 @@ class nntracker_respi_spatialpositioning_head(nntracker_respi_MPn):
         return x
 
 
-class nntracker_respi_mnv3s(nntracker_respi):
+class nntracker_respi_mnv3s(nntracker_respi_spatialpositioning_head):
     # mobile net v3 small
-    export16 = 3
-    export8 = 8
-    export4 = 11
     chan16 = 24
     chan8 = 48
     chan4 = 96
-    chan4Simp = 160
-    last_channel = 1024 // 2
+    chan4c = 96
 
     def __init__(self, *a, **kw):
         super().__init__(*a, **kw)
         weights = torchvision.models.MobileNet_V3_Small_Weights.DEFAULT
         self.backbone = torchvision.models.mobilenet_v3_small(weights=weights)
         self.backbonepreproc = weights.transforms(antialias=True)
+        self.chan4Simplifier = None
+
+    def fpnForward(self, x):
+        export16 = 3
+        export8 = 8
+        export4 = 11
+        for i, module in enumerate(self.backbone.features):
+            x = module(x)
+            if i == export16:
+                out16 = x
+            elif i == export8:
+                out8 = x
+            elif i == export4:
+                out4 = x
+                break
+        return out16, out8, out4
 
 
-class nntracker_respi_resnet(nntracker_respi_MPn):
-    export16 = 5
-    export8 = 6
-    export4 = 7
+class nntracker_respi_resnet(nntracker_respi_spatialpositioning_head):
     chan16 = 128
     chan8 = 256
-    chan4 = 512
-    chan4Simp = 256
+    chan4c = 512
+    chan4 = 256
     last_channel = 512
 
     def __init__(self, *a, **kw):
@@ -616,6 +633,9 @@ class nntracker_respi_resnet(nntracker_respi_MPn):
         6 torch.Size([2, 256, 8, 8])
         7 torch.Size([2, 512, 4, 4])
         """
+        export16 = 5
+        export8 = 6
+        export4 = 7
         for i, m in enumerate(
             [
                 self.backbone.conv1,
@@ -630,11 +650,11 @@ class nntracker_respi_resnet(nntracker_respi_MPn):
         ):
             x = m(x)
             # print(i, x.shape)
-            if i == self.export16:
+            if i == export16:
                 out16 = x
-            elif i == self.export8:
+            elif i == export8:
                 out8 = x
-            elif i == self.export4:
+            elif i == export4:
                 out4 = x
                 break
         out4 = self.chan4Simplifier(out4)

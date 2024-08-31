@@ -16,8 +16,8 @@ dataset = labeldataset().init(
     ],
 )
 
-destSampleNum = 8192
-dest = r"dataset\affined"
+destSampleNum = 128
+dest = r"dataset\testset"
 destSpl = os.path.join(dest, "spl")
 destLbl = os.path.join(dest, "lbl")
 names = list()

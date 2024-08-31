@@ -378,7 +378,7 @@ class labeldataset(torch.utils.data.Dataset):
         stdShape=None,
         augSteps=list(),
     ):
-        self.augSteps = {s: True for s in augSteps}
+        self.augSteps = augSteps
         if selection is not None:
             selection = Xls2ListList(selection, sheetname)
             selection = [s[0] for s in selection]
@@ -396,10 +396,11 @@ class labeldataset(torch.utils.data.Dataset):
                 spl = reader.read(f"spl/{p}")
                 lbl = reader.read(f"lbl/{p}")
 
+                lbl = lbl[:, :, 0]
                 if stdShape is not None:
                     spl = cv.resize(spl, stdShape)
                     lbl = cv.resize(lbl, stdShape)
-                    lbl = cv.threshold(lbl[:, :, 0:1], 0.5, 1, cv.THRESH_BINARY)[1]
+                    lbl = np.where(lbl > 0.5, 1., 0.)
                 pi = lbl2PlaneInfo(lbl)
                 # simple check
                 assert pi[3] < 1, f"image {p} have too big wingspan"
