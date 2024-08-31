@@ -32,7 +32,7 @@ RunOnWtUtilityEnviroment = True
 if RunOnWtUtilityEnviroment:
     datasetroot = r"dataset/"
 else:
-    datasetroot = r"/kaggle/input/planedetectiondataset"
+    datasetroot = r"/kaggle/input/nntrackerle2re"
 
 # %%
 # nn def
@@ -115,5 +115,3 @@ model.save(modelpath)
 # %%
 # demo
 model.demo(train_data)
-
-# %%

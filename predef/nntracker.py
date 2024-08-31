@@ -98,8 +98,9 @@ class SpatialPositioning(torch.nn.Module):
                 w,
                 dtype=torch.float32,
                 requires_grad=False,
-            ).reshape([1, 1, 1, -1])
-        ).requires_grad_(False)
+            ).reshape([1, 1, 1, -1]),
+            requires_grad=False,
+        )
         self.weightY = torch.nn.Parameter(
             torch.linspace(
                 0,
@@ -107,15 +108,17 @@ class SpatialPositioning(torch.nn.Module):
                 h,
                 dtype=torch.float32,
                 requires_grad=False,
-            ).reshape([1, 1, -1, 1])
-        ).requires_grad_(False)
+            ).reshape([1, 1, -1, 1]),
+            requires_grad=False,
+        )
         self.softmax = torch.nn.Softmax2d()
 
     def forward(self, x):
-        x = self.softmax(x)
-        X = torch.sum(self.weightX * x, dim=[-1, -2])
-        Y = torch.sum(self.weightY * x, dim=[-1, -2])
-        x = torch.concat([X, Y], dim=-1)
+        xsm = self.softmax(x)
+        M = torch.sum(x * xsm, dim=[-1, -2])
+        X = torch.sum(self.weightX * xsm, dim=[-1, -2])
+        Y = torch.sum(self.weightY * xsm, dim=[-1, -2])
+        x = torch.concat([X, Y, M], dim=-1)
         return x
 
 
@@ -532,7 +535,7 @@ class nntracker_respi_spatialpositioning_head(nntracker_respi_MPn):
 
         self.discriminatorFinal = torch.nn.Sequential(
             torch.nn.Linear(
-                2 * (self.chan4 + self.chan8 + self.chan16),  # 2 for [x, y]
+                3 * (self.chan4 + self.chan8 + self.chan16),  # 2 for [x, y]
                 self.last_channel,
             ),
             torch.nn.Dropout(self.dropoutp),
