@@ -39,7 +39,7 @@ else:
 modelpath = r"nntracker.pth"
 model: nntracker_respi = getmodel(
     nntracker_respi_mnv3s(
-        dropoutp=0,
+        dropoutp=0.3,
     ),
     modelpath,
     device,

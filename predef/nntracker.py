@@ -213,48 +213,6 @@ class ELAN_H(torch.nn.Module):
         )
 
 
-class MPn(torch.nn.Module):
-    def __init__(self, in_channels, n_value=1, downSamplingStride=2):
-        super().__init__()
-        self.in_channels = in_channels
-        assert in_channels % 2 == 0
-        out_channels = n_value * in_channels
-        self.out_channels = out_channels
-        cPath = out_channels // 2
-        self.wayPooling = torch.nn.Sequential(
-            torch.nn.MaxPool2d(downSamplingStride, downSamplingStride),
-            ConvGnHs(in_channels, cPath),
-        )
-        self.wayConv = torch.nn.Sequential(
-            ConvGnHs(in_channels, cPath, kernel_size=1),
-            ConvGnHs(cPath, cPath, stride=downSamplingStride, padding=1),
-        )
-        self.combiner = ConvGnHs(cPath * 2, out_channels)
-
-    def forward(self, x):
-        o_pool = self.wayPooling(x)
-        o_conv = self.wayConv(x)
-        return self.combiner(torch.concat([o_pool, o_conv], dim=1))
-
-
-class FinalModule(torch.nn.Module):
-    def parameters(
-        self, recurse: bool = True
-    ) -> typing.Iterator[torch.nn.parameter.Parameter]:
-        return filter(
-            lambda x: x.requires_grad is not False, super().parameters(recurse)
-        )
-
-    def calcloss(self, *arg, **kw): ...
-
-    def trainprogress(self, datatuple): ...
-
-    def inferenceProgress(self, datatuple):
-        pass
-
-    def save(self, path):
-        savemodel(self, path)
-
 
 class PRNAddition:
     def __init__(self, rho) -> None:
@@ -540,24 +498,24 @@ class nntracker_respi_spatialpositioning_head(nntracker_respi_MPn):
             ),
             torch.nn.Dropout(self.dropoutp),
             torch.nn.Hardswish(),
-            # res_through(
-            #     torch.nn.Sequential(
-            #         torch.nn.Linear(
-            #             self.last_channel,
-            #             self.last_channel,
-            #         ),
-            #         torch.nn.Dropout(self.dropoutp),
-            #         torch.nn.Hardswish(),
-            #     ),
-            #     torch.nn.Sequential(
-            #         torch.nn.Linear(
-            #             self.last_channel,
-            #             self.last_channel,
-            #         ),
-            #         torch.nn.Dropout(self.dropoutp),
-            #         torch.nn.Hardswish(),
-            #     ),
-            # ),
+            res_through(
+                torch.nn.Sequential(
+                    torch.nn.Linear(
+                        self.last_channel,
+                        self.last_channel,
+                    ),
+                    torch.nn.Dropout(self.dropoutp),
+                    torch.nn.Hardswish(),
+                ),
+                torch.nn.Sequential(
+                    torch.nn.Linear(
+                        self.last_channel,
+                        self.last_channel,
+                    ),
+                    torch.nn.Dropout(self.dropoutp),
+                    torch.nn.Hardswish(),
+                ),
+            ),
             torch.nn.Linear(self.last_channel, 4),
             InspFuncMixture(
                 [

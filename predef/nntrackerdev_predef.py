@@ -4,6 +4,7 @@ from utilitypack.util_np import *
 from utilitypack.util_ocv import *
 from utilitypack.util_torch import *
 from utilitypack.util_pyplot import *
+from utilitypack.util_xls import *
 import torchvision
 from torch import nn
 
@@ -486,13 +487,3 @@ def AABBOf(lbl, noobjthresh=5):
 
 def PI2Str(pi):
     return ",".join([f"{i:.2f}" for i in pi])
-
-
-def getmodel(model0: torch.nn.Module, modelpath, device):
-    model = setModule(model0, path=modelpath, device=device)
-    paramNum = np.sum(
-        [p.numel() for n, p in model.named_parameters() if p.requires_grad]
-    )
-    print(f"{paramNum=}")
-    # print(model)
-    return model
